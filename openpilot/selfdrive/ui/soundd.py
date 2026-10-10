@@ -14,6 +14,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.system import micd
 from openpilot.common.hardware import HARDWARE
 
+from openpilot.sunnypilot.selfdrive.ui.alert_volume import AlertVolume
 from openpilot.sunnypilot.selfdrive.ui.quiet_mode import QuietMode
 
 SAMPLE_RATE = 48000
@@ -78,7 +79,11 @@ class Soundd(QuietMode):
 
     self.current_alert = AudibleAlert.none
     self.current_volume = MIN_VOLUME
+    self.auto_volume = MIN_VOLUME
     self.current_sound_frame = 0
+
+    self.alert_volume = AlertVolume(self.params)
+    self.test_alert = False
 
     self.ramp_start_volume = MIN_VOLUME
     self.ramp_start_time = 0.
@@ -148,12 +153,37 @@ class Soundd(QuietMode):
     self.pending_stop = False
     if self.current_alert != new_alert and (new_alert != AudibleAlert.none or current_alert_played_once):
       if new_alert == AudibleAlert.warningImmediate:
-        self.ramp_start_volume = self.current_volume
+        self.ramp_start_volume = self.alert_volume.volume_for(new_alert, self.auto_volume)
         self.ramp_start_time = time.monotonic()
       self.current_alert = new_alert
       self.current_sound_frame = 0
 
+  def alert_finished(self) -> bool:
+    """No sound is playing: no alert, or a one-shot alert that has played all its loops."""
+    if self.current_alert == AudibleAlert.none:
+      return True
+    num_loops = sound_list[self.current_alert][1]
+    return num_loops is not None and self.current_sound_frame >= num_loops * len(self.loaded_sounds[self.current_alert])
+
+  def play_test_alert(self, alert):
+    # a settings test button: play the sound once at its configured volume
+    self.current_alert = AudibleAlert.none
+    self.update_alert(alert)
+    self.test_alert = True
+    if sound_list[alert][1] is None:
+      self.pending_stop = True  # looping sounds stop at the end of their first loop
+
   def get_audible_alert(self, sm):
+    if self.test_alert:
+      real_alert = sm.updated['selfdriveState'] and sm['selfdriveState'].alertSound.raw != AudibleAlert.none
+      if not (real_alert or self.alert_finished()):
+        return
+      # the test is over, or a real alert cuts it short
+      self.test_alert = False
+      self.pending_stop = False
+      self.current_alert = AudibleAlert.none
+      self.current_sound_frame = 0
+
     if sm.updated['selfdriveState']:
       new_alert = sm['selfdriveState'].alertSound.raw
       self.update_alert(new_alert)
@@ -190,17 +220,23 @@ class Soundd(QuietMode):
         sm.update(0)
 
         self.load_param()
+        self.alert_volume.update()
 
         # freeze volume during alerts to avoid mic feedback increasing volume
         if sm.updated['soundPressure']:
           self.spl_filter_weighted.update(sm["soundPressure"].soundPressureWeightedDb)
           if self.current_alert == AudibleAlert.none:
-            self.current_volume = self.calculate_volume(float(self.spl_filter_weighted.x))
+            self.auto_volume = self.calculate_volume(float(self.spl_filter_weighted.x))
+
+        test_alert = self.alert_volume.poll_test_request()
+        if test_alert is not None and self.alert_finished() and not sm['selfdriveState'].enabled:
+          self.play_test_alert(test_alert)
 
         self.get_audible_alert(sm)
+        self.current_volume = self.alert_volume.volume_for(self.current_alert, self.auto_volume)
 
-        # Ramp up immediate warning sound over 4s
-        if self.current_alert == AudibleAlert.warningImmediate:
+        # Ramp up immediate warning sound over 4s, from whatever volume it was set to
+        if self.current_alert == AudibleAlert.warningImmediate and not self.test_alert:
           elapsed = time.monotonic() - self.ramp_start_time
           ramp_vol = float(np.interp(elapsed, [0, ALERT_RAMP_TIME], [self.ramp_start_volume, MAX_VOLUME]))
           self.current_volume = max(self.current_volume, ramp_vol)

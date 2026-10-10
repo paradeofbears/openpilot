@@ -18,6 +18,7 @@ from openpilot.selfdrive.ui.sunnypilot.layouts.settings.models import ModelsLayo
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.network import NetworkUISP
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.osm import OSMLayout
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.software import SoftwareLayoutSP
+from openpilot.selfdrive.ui.sunnypilot.layouts.settings.sounds import SoundsLayout
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.steering import SteeringLayout
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.sunnylink import SunnylinkLayout
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.toggles import TogglesLayoutSP
@@ -50,6 +51,7 @@ OP.PanelType = IntEnum(  # type: ignore[assignment] # ty: ignore[invalid-assignm
     "NAVIGATION",
     "TRIPS",
     "VEHICLE",
+    "SOUNDS",
   ],
   start=0,
 )
@@ -121,6 +123,7 @@ class SettingsLayoutSP(OP.SettingsLayout):
       OP.PanelType.STEERING: PanelInfo(tr_noop("Steering"), SteeringLayout(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_lateral.png"),
       OP.PanelType.CRUISE: PanelInfo(tr_noop("Cruise"), CruiseLayout(), icon="icons/speed_limit.png"),
       OP.PanelType.VISUALS: PanelInfo(tr_noop("Visuals"), VisualsLayout(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_visuals.png"),
+      OP.PanelType.SOUNDS: PanelInfo(tr_noop("Sounds"), SoundsLayout(), icon="icons_mici/alerts_bell.png"),
       OP.PanelType.DISPLAY: PanelInfo(tr_noop("Display"), DisplayLayout(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_display.png"),
       OP.PanelType.OSM: PanelInfo(tr_noop("OSM"), OSMLayout(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_map.png"),
       # OP.PanelType.NAVIGATION: PanelInfo(tr_noop("Navigation"), NavigationLayout(), icon="../../sunnypilot/selfdrive/assets/offroad/icon_map.png"),
