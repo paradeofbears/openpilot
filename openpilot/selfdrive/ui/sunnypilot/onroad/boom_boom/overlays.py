@@ -12,9 +12,11 @@ import time
 import pyray as rl
 
 from opendbc.sunnypilot.car.interfaces import get_steer_rail_schedule
+from openpilot.cereal import messaging
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.g_meter import GMeter
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import PARAMS, SLOW_REASON, STEER_LIMIT_ARC
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import get_bottom_dev_ui_offset
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.widgets import Widget
@@ -34,8 +36,12 @@ class BoomBoomOverlays(Widget):
     self._rail_cp = None
     self._rail_schedule = None
 
+    # services ui_state does not subscribe to, opened only while a widget that needs them is on
+    self._sm: messaging.SubMaster | None = None
+
     self.slow_reason = SlowReasonPill()
     self.steer_arc = SteerLimitArc()
+    self.g_meter = GMeter()
 
   def _reload_params(self) -> None:
     for p in PARAMS:
@@ -58,6 +64,20 @@ class BoomBoomOverlays(Widget):
       self._rail_schedule = get_steer_rail_schedule(ui_state.CP) if ui_state.CP is not None else None
     return self._rail_schedule
 
+  def _extra_sm(self) -> messaging.SubMaster | None:
+    if self.on(G_METER):
+      if self._sm is None:
+        self._sm = messaging.SubMaster(['deviceMotion'])
+      self._sm.update(0)
+    else:
+      self._sm = None
+    return self._sm
+
+  def _device_motion(self, extra):
+    if extra is None or not extra.seen['deviceMotion'] or not extra.alive['deviceMotion']:
+      return None
+    return extra['deviceMotion']
+
   def _update_state(self) -> None:
     self._frame += 1
     if self._frame % PARAM_RELOAD_FRAMES == 0:
@@ -74,17 +94,25 @@ class BoomBoomOverlays(Widget):
       self._started = True
       self.slow_reason.reset()
       self.steer_arc.reset()
+      self.g_meter.reset()
 
     sm = ui_state.sm
+    extra = self._extra_sm()
     if self.on(SLOW_REASON):
       self.slow_reason.update(sm, ui_state.has_longitudinal_control, dt)
     if self.on(STEER_LIMIT_ARC):
       self.steer_arc.update(sm, self._rail(), dt)
+    if self.on(G_METER):
+      self.g_meter.update(sm, self._device_motion(extra), dt)
 
   def _render(self, rect: rl.Rectangle) -> None:
     if not self._fresh():
       return
+    bottom = rl.Rectangle(rect.x, rect.y, rect.width, rect.height - get_bottom_dev_ui_offset())
+    if self.on(G_METER):
+      # the driver monitoring icon takes the bottom corner on the driver's side
+      self.g_meter.render(bottom, on_left=ui_state.sm['driverMonitoringState'].isRHD)
     if self.on(STEER_LIMIT_ARC):
-      self.steer_arc.render(rl.Rectangle(rect.x, rect.y, rect.width, rect.height - get_bottom_dev_ui_offset()))
+      self.steer_arc.render(bottom)
     if self.on(SLOW_REASON):
       self.slow_reason.render(rect)

@@ -10,8 +10,9 @@ from openpilot.system.ui.lib.multilang import tr
 
 SLOW_REASON = "SlowdownReason"
 STEER_LIMIT_ARC = "SteerLimitArc"
+G_METER = "GForceMeter"
 
-PARAMS = (SLOW_REASON, STEER_LIMIT_ARC)
+PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER)
 
 
 def toggle_defs() -> dict:
@@ -30,6 +31,13 @@ def toggle_defs() -> dict:
          "as steering torque nears what the EPS can deliver at this speed. Turns amber, then red at the limit, " +
          "draws the request that was cut off past the end of the arc, and pulses red while the controller " +
          "is saturated. Display only."),
+      None,
+    ),
+    G_METER: (
+      lambda: tr("G-Force Meter"),
+      tr("Show a friction circle in the bottom corner: a dot for the car's current acceleration, braking and " +
+         "cornering force, a short trail, and a ring at the drive's peak. Uses the device's motion sensors, " +
+         "or the car's speed and steering when those are not ready."),
       None,
     ),
   }

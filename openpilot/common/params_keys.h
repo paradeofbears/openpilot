@@ -217,6 +217,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     // boom-boom display-only onroad widgets (selfdrive/ui/sunnypilot/onroad/boom_boom), all off by default
     {"SlowdownReason", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"SteerLimitArc", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"GForceMeter", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RoadEdgeLaneChangeEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RocketFuel", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ScreenSaverEnabled", {PERSISTENT | BACKUP, BOOL, "1"}},
