@@ -1,6 +1,6 @@
 
 ## install alerts fork
-
+When your comma device asks for a custom software URL during setup, type:
 ```
 paradeofbears/alerts
 ```
