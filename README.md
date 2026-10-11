@@ -1,9 +1,9 @@
 
 
-## install alerts fork
+## install boom-boom fork
 When your comma device asks for a custom software URL during setup, type:
 ```
-paradeofbears/alerts
+paradeofbears/boom-boom
 ```
 
 # zoompilot
