@@ -87,6 +87,14 @@ class VisualsLayout(Widget):
         tr("When enabled, visual turn indicators are drawn on the HUD."),
         None,
       ),
+      "ReverseCameraView": (
+        lambda: tr("Show Cameras in Reverse"),
+        tr("In reverse, show the wide road camera and the cabin camera side by side instead of the " +
+           "full-screen Reverse banner. Neither camera looks behind the car: the road camera shows your " +
+           "front end while backing out, and the cabin camera catches a slice of the rear window. " +
+           "Use your car's backup camera and mirrors for reversing."),
+        None,
+      ),
       "RocketFuel": (
         lambda: tr("Real-time Acceleration Bar"),
         tr("Show an indicator on the left side of the screen to display real-time vehicle acceleration and deceleration. " +

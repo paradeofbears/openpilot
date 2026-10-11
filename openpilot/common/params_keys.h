@@ -213,6 +213,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     // Drops only the device sound of "Turn Exceeds Steering Limit"; the banner and the car's dash warning stay.
     {"SilenceSteerLimitAlert", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RainbowMode", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"ReverseCameraView", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RoadEdgeLaneChangeEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RocketFuel", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ScreenSaverEnabled", {PERSISTENT | BACKUP, BOOL, "1"}},

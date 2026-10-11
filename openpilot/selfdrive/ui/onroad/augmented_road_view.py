@@ -19,6 +19,7 @@ if gui_app.sunnypilot_ui():
   from openpilot.selfdrive.ui.sunnypilot.onroad.driver_state import DriverStateRendererSP as DriverStateRenderer
   from openpilot.selfdrive.ui.sunnypilot.onroad.hud_renderer import HudRendererSP as HudRenderer
   from openpilot.selfdrive.ui.sunnypilot.ui_state import OnroadTimerStatus
+  from openpilot.selfdrive.ui.sunnypilot.onroad.reverse_camera_view import ReverseCameraView, hides_alert
 
 OpState = log.SelfdriveState.OpenpilotState
 CALIBRATED = log.ExtrinsicsCalibration.Status.calibrated
@@ -56,6 +57,7 @@ class AugmentedRoadView(CameraView, AugmentedRoadViewSP):
     self._hud_renderer = HudRenderer()
     self.alert_renderer = AlertRenderer()
     self.driver_state_renderer = DriverStateRenderer()
+    self._reverse_view = ReverseCameraView(ui_state.params) if gui_app.sunnypilot_ui() else None
 
   def _render(self, rect):
     # Only render when system is started to avoid invalid data access
@@ -83,6 +85,15 @@ class AugmentedRoadView(CameraView, AugmentedRoadViewSP):
       int(self._content_rect.width),
       int(self._content_rect.height)
     )
+
+    # In reverse with the reverse camera view on, the two cameras replace the driving view
+    if self._reverse_view is not None and self._reverse_view.update(ui_state.sm, ui_state.started):
+      self._reverse_view.render(self._content_rect)
+      if not hides_alert(True, ui_state.sm['selfdriveState'].alertType):
+        self.alert_renderer.render(self._content_rect)
+      rl.end_scissor_mode()
+      self._draw_border(rect)
+      return
 
     # Render the base camera view
     super()._render(self._content_rect)
