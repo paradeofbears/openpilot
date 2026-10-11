@@ -26,6 +26,7 @@ from openpilot.selfdrive.selfdrived.alertmanager import AlertManager, set_offroa
 from openpilot.common.version import get_build_metadata
 from openpilot.common.hardware import HARDWARE
 
+from openpilot.sunnypilot.selfdrive.ui.alert_volume import SILENCE_STEER_LIMIT_PARAM, published_alert_sound
 from openpilot.sunnypilot.mads.mads import ModularAssistiveDrivingSystem
 from openpilot.sunnypilot import get_sanitize_int_param
 from openpilot.sunnypilot.selfdrive.car.car_specific import CarSpecificEventsSP
@@ -122,6 +123,7 @@ class SelfdriveD(CruiseHelper):
     self.is_metric = self.params.get_bool("IsMetric")
     self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
     self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
+    self.silence_steer_limit_alert = self.params.get_bool(SILENCE_STEER_LIMIT_PARAM)
 
     car_recognized = self.CP.brand != 'mock'
 
@@ -631,7 +633,8 @@ class SelfdriveD(CruiseHelper):
     ss.alertSize = self.AM.current_alert.alert_size
     ss.alertStatus = self.AM.current_alert.alert_status
     ss.alertType = self.AM.current_alert.alert_type
-    ss.alertSound = self.AM.current_alert.audible_alert
+    ss.alertSound = published_alert_sound(self.AM.current_alert.alert_type, self.AM.current_alert.audible_alert,
+                                          self.silence_steer_limit_alert)
     ss.alertHudVisual = self.AM.current_alert.visual_alert
 
     self.pm.send('selfdriveState', ss_msg)
@@ -691,6 +694,7 @@ class SelfdriveD(CruiseHelper):
       self.is_metric = self.params.get_bool("IsMetric")
       self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
       self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
+      self.silence_steer_limit_alert = self.params.get_bool(SILENCE_STEER_LIMIT_PARAM)
       self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
       self.personality = self.params.get("LongitudinalPersonality", return_default=True)
 

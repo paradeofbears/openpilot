@@ -11,6 +11,7 @@ from openpilot.common.params import Params
 from openpilot.common.test import OpenpilotTestCase
 from openpilot.sunnypilot.selfdrive.ui.alert_volume import (
   AUTO_PCT, CATEGORIES, CONTROL_PARAM, SAFETY_FLOOR_PCT, TEST_PARAM, AlertVolume, AudibleAlert, AudibleAlertSP, clamp_pct,
+  published_alert_sound,
 )
 from openpilot.selfdrive.ui import soundd as soundd_module
 from openpilot.selfdrive.ui.soundd import Soundd, sound_list
@@ -189,3 +190,39 @@ class TestSounddAlertVolume(OpenpilotTestCase):
 
 def test_soundd_imports_alert_volume():
   assert soundd_module.AlertVolume is AlertVolume
+
+
+class TestSilenceSteerLimitAlert(OpenpilotTestCase):
+  @staticmethod
+  def _real_alert(event_name):
+    from openpilot.selfdrive.selfdrived.events import ET, Events
+    events = Events()
+    events.add(event_name)
+    alerts = events.create_alerts([ET.WARNING])
+    assert len(alerts) == 1
+    return alerts[0]
+
+  def test_matches_the_real_steer_limit_alert(self):
+    from openpilot.cereal import log
+    alert = self._real_alert(log.OnroadEvent.EventName.steerSaturated)
+    assert alert.audible_alert != AudibleAlert.none  # it does have a sound stock
+    assert published_alert_sound(alert.alert_type, alert.audible_alert, True) == AudibleAlert.none
+    assert published_alert_sound(alert.alert_type, alert.audible_alert, False) == alert.audible_alert
+
+  def test_other_alerts_keep_their_sound(self):
+    from openpilot.cereal import log
+    EventName = log.OnroadEvent.EventName
+    for name in (EventName.laneChangeBlocked, EventName.fcw, EventName.steerTempUnavailable):
+      from openpilot.selfdrive.selfdrived.events import ET, EVENTS
+      types = [et for et in (ET.WARNING, ET.PERMANENT) if et in EVENTS.get(name, {})]
+      if not types:
+        continue
+      from openpilot.selfdrive.selfdrived.events import Events
+      events = Events()
+      events.add(name)
+      for alert in events.create_alerts(types, [None] * 6):
+        assert published_alert_sound(alert.alert_type, alert.audible_alert, True) == alert.audible_alert, alert.alert_type
+
+  def test_lookalike_names_are_not_silenced(self):
+    assert published_alert_sound("steerSaturatedX/warning", AudibleAlert.promptRepeat, True) == AudibleAlert.promptRepeat
+    assert published_alert_sound("", AudibleAlert.warningImmediate, True) == AudibleAlert.warningImmediate

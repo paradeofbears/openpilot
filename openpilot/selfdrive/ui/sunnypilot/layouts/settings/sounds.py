@@ -6,7 +6,8 @@ See the LICENSE.md file in the root directory for more details.
 """
 from openpilot.common.params import Params
 from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.sunnypilot.selfdrive.ui.alert_volume import AUTO_PCT, CATEGORIES, CONTROL_PARAM, MAX_PCT, TEST_PARAM
+from openpilot.sunnypilot.selfdrive.ui.alert_volume import AUTO_PCT, CATEGORIES, CONTROL_PARAM, MAX_PCT, \
+  SILENCE_STEER_LIMIT_PARAM, TEST_PARAM
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.sunnypilot.widgets.list_view import toggle_item_sp, option_item_sp
 from openpilot.system.ui.widgets.scroller_tici import Scroller
@@ -99,7 +100,17 @@ class SoundsLayout(Widget):
         inline=True,
       )
 
-    return [self._volume_control, *self._volume_items.values()]
+    self._silence_steer_limit = toggle_item_sp(
+      param=SILENCE_STEER_LIMIT_PARAM,
+      title=lambda: tr("Silence Steering Limit Alert"),
+      description=lambda: tr("Mute the chime for \"Turn Exceeds Steering Limit\", which plays when a curve needs more " +
+                             "steering than openpilot can give. The \"Take Control\" banner still shows and your car's " +
+                             "own dash warning is unchanged; only the comma's sound is removed. " +
+                             "Works whether or not Alert Volumes is on."),
+      initial_state=ui_state.params.get_bool(SILENCE_STEER_LIMIT_PARAM),
+    )
+
+    return [self._volume_control, *self._volume_items.values(), self._silence_steer_limit]
 
   def _preview(self, category: str):
     # soundd picks this up within a quarter second and plays the sound once, offroad only

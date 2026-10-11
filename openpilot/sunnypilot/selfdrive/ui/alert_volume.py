@@ -23,6 +23,21 @@ MAX_PCT = 100
 
 CONTROL_PARAM = "AlertVolumeControl"
 TEST_PARAM = "AlertVolumeTest"
+SILENCE_STEER_LIMIT_PARAM = "SilenceSteerLimitAlert"
+
+# alert_type is "<event name>/<event type>"; only the steering-limit warning can be silenced
+STEER_LIMIT_ALERT_PREFIX = "steerSaturated/"
+
+
+def published_alert_sound(alert_type: str, audible_alert: int, silence_steer_limit: bool) -> int:
+  """The sound selfdrived publishes for its current alert.
+
+  With SilenceSteerLimitAlert on, "Turn Exceeds Steering Limit" publishes no sound. Its banner,
+  its dash HUD signal and every other alert's sound are untouched.
+  """
+  if silence_steer_limit and alert_type.startswith(STEER_LIMIT_ALERT_PREFIX):
+    return AudibleAlert.none
+  return audible_alert
 
 # category -> (param, floor). Order is the order the settings page lists them in.
 CATEGORIES: dict[str, tuple[str, int]] = {
