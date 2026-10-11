@@ -16,7 +16,8 @@ from openpilot.cereal import messaging
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.g_meter import GMeter
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC, TRIP_CARD
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import TripCard
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import get_bottom_dev_ui_offset
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.widgets import Widget
@@ -42,6 +43,7 @@ class BoomBoomOverlays(Widget):
     self.slow_reason = SlowReasonPill()
     self.steer_arc = SteerLimitArc()
     self.g_meter = GMeter()
+    self.trip_card = TripCard()
 
   def _reload_params(self) -> None:
     for p in PARAMS:
@@ -78,6 +80,13 @@ class BoomBoomOverlays(Widget):
       return None
     return extra['deviceMotion']
 
+  @staticmethod
+  def _gps():
+    """The best live GPS message, or None: one with a fix first, the external receiver before the modem's."""
+    sm = ui_state.sm
+    live = [sm[name] for name in ('gpsLocationExternal', 'gpsLocation') if sm.alive[name] and sm.valid[name]]
+    return next((g for g in live if g.hasFix), live[0] if live else None)
+
   def _update_state(self) -> None:
     self._frame += 1
     if self._frame % PARAM_RELOAD_FRAMES == 0:
@@ -95,6 +104,7 @@ class BoomBoomOverlays(Widget):
       self.slow_reason.reset()
       self.steer_arc.reset()
       self.g_meter.reset()
+      self.trip_card.reset()
 
     sm = ui_state.sm
     extra = self._extra_sm()
@@ -104,6 +114,8 @@ class BoomBoomOverlays(Widget):
       self.steer_arc.update(sm, self._rail(), dt)
     if self.on(G_METER):
       self.g_meter.update(sm, self._device_motion(extra), dt)
+    if self.on(TRIP_CARD):
+      self.trip_card.update(sm, ui_state.engaged, ui_state.has_longitudinal_control, self._gps(), dt)
 
   def _render(self, rect: rl.Rectangle) -> None:
     if not self._fresh():
@@ -116,3 +128,5 @@ class BoomBoomOverlays(Widget):
       self.steer_arc.render(bottom)
     if self.on(SLOW_REASON):
       self.slow_reason.render(rect)
+    if self.on(TRIP_CARD):
+      self.trip_card.render(rect, ui_state.is_metric)

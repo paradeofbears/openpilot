@@ -11,8 +11,9 @@ from openpilot.system.ui.lib.multilang import tr
 SLOW_REASON = "SlowdownReason"
 STEER_LIMIT_ARC = "SteerLimitArc"
 G_METER = "GForceMeter"
+TRIP_CARD = "TripSummary"
 
-PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER)
+PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD)
 
 
 def toggle_defs() -> dict:
@@ -38,6 +39,13 @@ def toggle_defs() -> dict:
       tr("Show a friction circle in the bottom corner: a dot for the car's current acceleration, braking and " +
          "cornering force, a short trail, and a ring at the drive's peak. Uses the device's motion sensors, " +
          "or the car's speed and steering when those are not ready."),
+      None,
+    ),
+    TRIP_CARD: (
+      lambda: tr("Trip Summary in Park"),
+      tr("When you shift into Park, show a card for the drive: distance, time, average and top speed, how much " +
+         "openpilot steered (and drove), disengagements, hard brakes and starts, how smooth it was, and the " +
+         "climb and descent from GPS. Counts from the moment the device goes onroad."),
       None,
     ),
   }
