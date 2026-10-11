@@ -1,3 +1,11 @@
+
+## install alerts fork
+
+```
+paradeofbears/alerts
+```
+
+
 # zoompilot
 
 A Mazda-optimized fork of [sunnypilot](https://github.com/sunnypilot/sunnypilot) for the CX-5 and CX-9. My goal is to enable the best steering possible and support all sunnypilot features on the 2022-2025 CX-5, staying within openpilot's safety guidelines.
