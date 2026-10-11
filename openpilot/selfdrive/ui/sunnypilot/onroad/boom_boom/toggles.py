@@ -12,8 +12,9 @@ SLOW_REASON = "SlowdownReason"
 STEER_LIMIT_ARC = "SteerLimitArc"
 G_METER = "GForceMeter"
 TRIP_CARD = "TripSummary"
+TRAFFIC = "TrafficBox"
 
-PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD)
+PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD, TRAFFIC)
 
 
 def toggle_defs() -> dict:
@@ -46,6 +47,14 @@ def toggle_defs() -> dict:
       tr("When you shift into Park, show a card for the drive: distance, time, average and top speed, how much " +
          "openpilot steered (and drove), disengagements, hard brakes and starts, how smooth it was, and the " +
          "climb and descent from GPS. Counts from the moment the device goes onroad."),
+      None,
+    ),
+    TRAFFIC: (
+      lambda: tr("Traffic Box"),
+      tr("A small top-down map on the right of the cars openpilot knows about. With openpilot longitudinal " +
+         "(alpha long) it shows the lead cars the camera sees and the blind-spot zones; the stock radar is " +
+         "silenced then, so cars in other lanes ahead are not shown. With stock cruise it also shows the radar's " +
+         "tracks ahead. Nothing reports cars directly behind. Needs blind-spot monitoring for the side zones."),
       None,
     ),
   }

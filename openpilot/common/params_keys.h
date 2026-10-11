@@ -219,6 +219,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"SteerLimitArc", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"GForceMeter", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"TripSummary", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"TrafficBox", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RoadEdgeLaneChangeEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RocketFuel", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ScreenSaverEnabled", {PERSISTENT | BACKUP, BOOL, "1"}},

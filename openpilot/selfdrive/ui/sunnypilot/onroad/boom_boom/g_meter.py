@@ -30,6 +30,7 @@ RADIUS = 115
 MARGIN = 50              # px from the view's edges
 TEXT_SIZE = 46
 LABEL_SIZE = 30
+FOOTPRINT_H = TEXT_SIZE + 8 + 2 * (RADIUS + 10)  # px above the bottom margin, for widgets stacked over it
 BG = rl.Color(0, 0, 0, 140)
 RING = rl.Color(255, 255, 255, 60)
 CROSS = rl.Color(255, 255, 255, 40)

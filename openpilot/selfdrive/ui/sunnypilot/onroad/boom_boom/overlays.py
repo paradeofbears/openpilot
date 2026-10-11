@@ -13,17 +13,22 @@ import pyray as rl
 
 from opendbc.sunnypilot.car.interfaces import get_steer_rail_schedule
 from openpilot.cereal import messaging
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.g_meter import GMeter
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.g_meter import FOOTPRINT_H as G_METER_H, GMeter
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC, TRIP_CARD
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import (
+  G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
+)
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.traffic import TrafficBox, box_rect
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import TripCard
-from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import get_bottom_dev_ui_offset
+from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiState, get_bottom_dev_ui_offset
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.widgets import Widget
 
 PARAM_RELOAD_FRAMES = 30
 MAX_DT = 0.2  # s; a stalled frame must not count as a long stretch of driving
+STACK_GAP = 30  # px between the traffic box and the G-meter under it
+DEV_UI_RIGHT_W = 230  # px the developer UI's right column takes
 
 
 class BoomBoomOverlays(Widget):
@@ -39,11 +44,13 @@ class BoomBoomOverlays(Widget):
 
     # services ui_state does not subscribe to, opened only while a widget that needs them is on
     self._sm: messaging.SubMaster | None = None
+    self._sm_services: tuple[str, ...] = ()
 
     self.slow_reason = SlowReasonPill()
     self.steer_arc = SteerLimitArc()
     self.g_meter = GMeter()
     self.trip_card = TripCard()
+    self.traffic = TrafficBox()
 
   def _reload_params(self) -> None:
     for p in PARAMS:
@@ -67,18 +74,23 @@ class BoomBoomOverlays(Widget):
     return self._rail_schedule
 
   def _extra_sm(self) -> messaging.SubMaster | None:
+    services = []
     if self.on(G_METER):
-      if self._sm is None:
-        self._sm = messaging.SubMaster(['deviceMotion'])
+      services.append('deviceMotion')
+    if self.on(TRAFFIC) and not ui_state.has_longitudinal_control:
+      services.append('radarTracks')  # alpha long silences the radar, so there are none to read
+    if tuple(services) != self._sm_services:
+      self._sm_services = tuple(services)
+      self._sm = messaging.SubMaster(services) if services else None
+    if self._sm is not None:
       self._sm.update(0)
-    else:
-      self._sm = None
     return self._sm
 
-  def _device_motion(self, extra):
-    if extra is None or not extra.seen['deviceMotion'] or not extra.alive['deviceMotion']:
+  @staticmethod
+  def _extra(extra, service: str):
+    if extra is None or service not in extra.seen or not extra.seen[service] or not extra.alive[service]:
       return None
-    return extra['deviceMotion']
+    return extra[service]
 
   @staticmethod
   def _gps():
@@ -105,6 +117,7 @@ class BoomBoomOverlays(Widget):
       self.steer_arc.reset()
       self.g_meter.reset()
       self.trip_card.reset()
+      self.traffic.reset()
 
     sm = ui_state.sm
     extra = self._extra_sm()
@@ -113,17 +126,25 @@ class BoomBoomOverlays(Widget):
     if self.on(STEER_LIMIT_ARC):
       self.steer_arc.update(sm, self._rail(), dt)
     if self.on(G_METER):
-      self.g_meter.update(sm, self._device_motion(extra), dt)
+      self.g_meter.update(sm, self._extra(extra, 'deviceMotion'), dt)
     if self.on(TRIP_CARD):
       self.trip_card.update(sm, ui_state.engaged, ui_state.has_longitudinal_control, self._gps(), dt)
+    if self.on(TRAFFIC):
+      self.traffic.update(sm, self._extra(extra, 'radarTracks'), ui_state.engaged)
 
   def _render(self, rect: rl.Rectangle) -> None:
     if not self._fresh():
       return
     bottom = rl.Rectangle(rect.x, rect.y, rect.width, rect.height - get_bottom_dev_ui_offset())
+    # the driver monitoring icon takes the bottom corner on the driver's side
+    g_meter_right = self.on(G_METER) and not ui_state.sm['driverMonitoringState'].isRHD
     if self.on(G_METER):
-      # the driver monitoring icon takes the bottom corner on the driver's side
-      self.g_meter.render(bottom, on_left=ui_state.sm['driverMonitoringState'].isRHD)
+      self.g_meter.render(bottom, on_left=not g_meter_right)
+    if self.on(TRAFFIC):
+      inset = DEV_UI_RIGHT_W if ui_state.developer_ui in (DeveloperUiState.RIGHT, DeveloperUiState.BOTH) else 0
+      box = box_rect(bottom, inset, G_METER_H + STACK_GAP if g_meter_right else 0)
+      if box is not None:
+        self.traffic.render(box)
     if self.on(STEER_LIMIT_ARC):
       self.steer_arc.render(bottom)
     if self.on(SLOW_REASON):
