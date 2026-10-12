@@ -19,7 +19,7 @@ from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import Powertrain
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
-  FLAVOUR_NAMES, OFF, DriveScore, Extra, driver_in_control,
+  CHAOS, FLAVOUR_NAMES, OFF, SUB_NAMES, DriveScore, Extra, driver_in_control, rank_letter,
 )
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -50,8 +50,14 @@ TITLE = rl.Color(255, 255, 255, 255)
 VALUE = rl.Color(255, 255, 255, 255)
 LABEL = rl.Color(255, 255, 255, 150)
 ACCENT = rl.Color(128, 216, 166, 255)
+RANK_W = 660             # the rank column beside the stats, when a rank style is on
 BADGE_R = 72
 BADGE_SIZE = 110
+BAR_H = 12
+BAR_ROW = 64
+HIGHLIGHT_ROW = 92
+HIGHLIGHT_SIZE = 48
+TRACK = rl.Color(255, 255, 255, 30)
 RANK_COLORS = {
   "S": rl.Color(255, 200, 40, 255),   # gold
   "A": rl.Color(128, 216, 166, 255),
@@ -237,21 +243,43 @@ class TripCard:
        (f"{100 * s.share(s.smooth_t, s.moving_t):.0f}%", tr("smooth driving"))),
       ((climb, tr("climb / descent (GPS)")), (fix, tr("GPS fix while moving"))),
     ]
-    sc = self.score
-    if sc.flavour != OFF:
-      rows.append(((str(sc.tailgates), tr("tailgating (you driving)")),
-                   (f"{100 * s.share(sc.driver_distance, s.distance):.0f}%", tr("of the distance you drove"))))
     return rows
+
+  def highlights(self) -> list[tuple[str, str]]:
+    """Six figures for the rank column, the ones that matter for the flavour."""
+    sc, s = self.score, self.stats
+    shared = [(str(sc.tailgates), tr("tailgating")),
+              (f"{100 * s.share(sc.driver_distance, s.distance):.0f}%", tr("of the distance you drove"))]
+    if sc.flavour == CHAOS:
+      launch = sc.best_0_60 if sc.best_0_60 is not None else sc.best_0_30
+      launch_label = tr("best 0-60 mph") if sc.best_0_60 is not None else tr("best 0-30 mph")
+      return [
+        (f"{sc.peak_lat_g:.2f} g" if sc.lat_t > 0 else "-", tr("peak cornering")),
+        (f"{launch:.1f} s" if launch is not None else "-", launch_label),
+        (f"{sc.perfect_shifts}/{sc.upshifts}" if sc.manual_t > 0 else "-", tr("perfect shifts")),
+        (str(sc.limiter_hits) if sc.rpm_t > 0 else "-", tr("limiter hits")),
+      ] + shared
+    gap = f"{sc.gap_sum / sc.gap_t:.1f} s" if sc.gap_t > 0 else "-"
+    eyes = f"{100 * (1 - s.share(sc.distracted_t, sc.dm_t)):.0f}%" if sc.dm_t > 0 else "-"
+    eco = f"{100 * s.share(sc.eco_t, sc.rpm_t):.0f}%" if sc.rpm_t > 0 else "-"
+    return [
+      (f"{sc.smooth_stops}/{sc.stops}", tr("smooth stops")),
+      (gap, tr("average gap")),
+      (eyes, tr("eyes on the road")),
+      (eco, tr("relaxed revs")),
+    ] + shared
 
   def render(self, rect: rl.Rectangle, is_metric: bool) -> None:
     a = self._alpha.x
     if a < 0.02:
       return
     rows = self.rows(is_metric)
+    ranking = self.score.flavour != OFF
+    w = PANEL_W + (RANK_W if ranking else 0)
     h = PAD * 2 + TITLE_SIZE + 24 + ROW_H * len(rows)
-    x = rect.x + (rect.width - PANEL_W) / 2
+    x = rect.x + (rect.width - w) / 2
     y = rect.y + (rect.height - h) / 2
-    rl.draw_rectangle_rounded(rl.Rectangle(x, y, PANEL_W, h), 0.06, 12, _fade(PANEL_BG, a))
+    rl.draw_rectangle_rounded(rl.Rectangle(x, y, w, h), 0.06 * PANEL_W / w, 12, _fade(PANEL_BG, a))
 
     bold = gui_app.font(FontWeight.BOLD)
     semi = gui_app.font(FontWeight.SEMI_BOLD)
@@ -269,26 +297,47 @@ class TripCard:
         rl.draw_text_ex(medium, label, rl.Vector2(cx, row_y + 14 + VALUE_SIZE + 4), LABEL_SIZE, 0, _fade(LABEL, a))
       row_y += ROW_H
 
-    if self.score.flavour != OFF:
-      self._draw_rank(x + PANEL_W - PAD - BADGE_R, y + PAD + BADGE_R, a, bold, medium)
+    if ranking:
+      rl.draw_rectangle(int(x + PANEL_W - 2), int(y + PAD), 2, int(h - 2 * PAD), _fade(TRACK, a))
+      self._draw_rank(x + PANEL_W + PAD // 2, y + PAD, RANK_W - PAD - PAD // 2, a, bold, semi, medium)
 
-  def _draw_rank(self, cx: float, cy: float, a: float, bold: rl.Font, medium: rl.Font) -> None:
+  def _draw_rank(self, x: float, y: float, w: float, a: float, bold: rl.Font, semi: rl.Font, medium: rl.Font) -> None:
     sc = self.score
     letter = sc.rank()
     color = RANK_COLORS.get(letter, LABEL)
+    cx, cy = x + BADGE_R, y + BADGE_R
     rl.draw_circle_v(rl.Vector2(cx, cy), BADGE_R, _fade(rl.Color(255, 255, 255, 18), a))
     rl.draw_ring(rl.Vector2(cx, cy), BADGE_R - 6, BADGE_R, 0, 360, 72, _fade(color, a))
     text = letter or "-"
     size = measure_text_cached(bold, text, BADGE_SIZE)
     rl.draw_text_ex(bold, text, rl.Vector2(cx - size.x / 2, cy - size.y / 2), BADGE_SIZE, 0, _fade(color, a))
 
+    tx = x + 2 * BADGE_R + 28
     caption = tr(FLAVOUR_NAMES[sc.flavour] + " RANK") if letter else tr("drive 1 km yourself to rank")
-    lines = [(caption, LABEL_SIZE, LABEL), (f"{sc.points:,} " + tr("pts"), 40, VALUE)]
-    ty = cy + BADGE_R + 12
-    for text, size_px, col in lines:
-      ts = measure_text_cached(medium, text, size_px)
-      rl.draw_text_ex(medium, text, rl.Vector2(min(cx - ts.x / 2, cx + BADGE_R - ts.x), ty), size_px, 0, _fade(col, a))
-      ty += size_px + 8
+    rl.draw_text_ex(medium, caption, rl.Vector2(tx, y + 8), LABEL_SIZE, 0, _fade(LABEL, a))
+    rl.draw_text_ex(semi, f"{sc.points:,} " + tr("pts"), rl.Vector2(tx, y + 8 + LABEL_SIZE + 6), 56, 0, _fade(VALUE, a))
+
+    by = y + 2 * BADGE_R + 28
+    subs = sc.sub_scores() or (None,) * 4
+    for name, value in zip(SUB_NAMES[sc.flavour], subs, strict=True):
+      rl.draw_text_ex(medium, tr(name), rl.Vector2(x, by), LABEL_SIZE - 2, 0, _fade(LABEL, a))
+      shown = "-" if value is None else f"{value:.0f}"
+      vs = measure_text_cached(semi, shown, LABEL_SIZE)
+      rl.draw_text_ex(semi, shown, rl.Vector2(x + w - vs.x, by - 2), LABEL_SIZE, 0, _fade(VALUE, a))
+      bar_y = int(by + LABEL_SIZE + 6)
+      rl.draw_rectangle_rounded(rl.Rectangle(x, bar_y, w, BAR_H), 1.0, 8, _fade(TRACK, a))
+      if value is not None and value > 0:
+        fill = RANK_COLORS[rank_letter(value)]
+        rl.draw_rectangle_rounded(rl.Rectangle(x, bar_y, max(BAR_H, w * value / 100), BAR_H), 1.0, 8, _fade(fill, a))
+      by += BAR_ROW
+
+    hy = by + 20
+    col_w = w / 2
+    for i, (value, label) in enumerate(self.highlights()):
+      hx = x + (i % 2) * col_w
+      ry = hy + (i // 2) * HIGHLIGHT_ROW
+      rl.draw_text_ex(semi, value, rl.Vector2(hx, ry), HIGHLIGHT_SIZE, 0, _fade(VALUE, a))
+      rl.draw_text_ex(medium, label, rl.Vector2(hx, ry + HIGHLIGHT_SIZE + 2), LABEL_SIZE - 4, 0, _fade(LABEL, a))
 
 
 def _fade(c: rl.Color, a: float) -> rl.Color:

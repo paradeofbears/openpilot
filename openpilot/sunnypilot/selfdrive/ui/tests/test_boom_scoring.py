@@ -232,3 +232,18 @@ class TestSubScores(OpenpilotTestCase):
     drive(s, 100.0, v=20.0, x=Extra(rpm=1500.0, pedal=200.0))
     subs = s.sub_scores()
     assert subs[3] is not None and s.rank_score() <= min(x for x in subs if x is not None) + WEAK_LINK
+
+
+class TestCardHighlights(OpenpilotTestCase):
+  def test_highlights_follow_the_flavour_and_show_dashes_without_data(self):
+    card = TripCard()
+    card.score = DriveScore(flavour=CHAOS)
+    values = {label: value for value, label in card.highlights()}
+    assert len(values) == 6 and values["peak cornering"] == "-" and values["perfect shifts"] == "-"
+    card.score = DriveScore(flavour=CHAOS, lat_t=10.0, peak_lat_g=0.41, manual_t=5.0, upshifts=4, perfect_shifts=3,
+                            best_0_30=5.3, best_0_60=12.4)
+    values = {label: value for value, label in card.highlights()}
+    assert values["peak cornering"] == "0.41 g" and values["perfect shifts"] == "3/4" and values["best 0-60 mph"] == "12.4 s"
+    card.score = DriveScore(flavour=SAFETY, stops=4, smooth_stops=3, dm_t=100.0, distracted_t=2.0)
+    values = {label: value for value, label in card.highlights()}
+    assert values["smooth stops"] == "3/4" and values["eyes on the road"] == "98%" and values["average gap"] == "-"
