@@ -222,6 +222,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"TrafficBox", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"LaneAwareness", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"MiniMap", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"TripRankStyle", {PERSISTENT | BACKUP, INT, "0"}},
     {"RoadEdgeLaneChangeEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RocketFuel", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ScreenSaverEnabled", {PERSISTENT | BACKUP, BOOL, "1"}},

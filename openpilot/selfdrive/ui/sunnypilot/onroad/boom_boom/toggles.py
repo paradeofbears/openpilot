@@ -15,8 +15,28 @@ TRIP_CARD = "TripSummary"
 TRAFFIC = "TrafficBox"
 LANE_AWARENESS = "LaneAwareness"
 MINI_MAP = "MiniMap"
+RANK_STYLE = "TripRankStyle"  # 0 off, 1 safety, 2 chaos (scoring.py)
 
 PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD, TRAFFIC, LANE_AWARENESS, MINI_MAP)
+
+
+def extra_items(params) -> list:
+  """Settings items that are not on/off toggles, appended after the visuals layout's own."""
+  from openpilot.system.ui.sunnypilot.widgets.list_view import multiple_button_item_sp
+  selected = params.get(RANK_STYLE, return_default=True) or 0
+  return [
+    multiple_button_item_sp(
+      title=lambda: tr("Drive Rank and Points"),
+      description=lambda: tr("Rank your own driving S to D and score points while you drive. Safety rewards smooth " +
+                             "driving; Chaos rewards hard launches and stops, never speed. Tailgating costs points in " +
+                             "both. Only stretches where you set the speed count, not openpilot or cruise. The rank " +
+                             "shows on the Park summary; the points to the right of the speed."),
+      buttons=[lambda: tr("Off"), lambda: tr("Safety"), lambda: tr("Chaos")],
+      selected_index=int(selected),
+      param=RANK_STYLE,
+      inline=False,
+    ),
+  ]
 
 
 def toggle_defs() -> dict:

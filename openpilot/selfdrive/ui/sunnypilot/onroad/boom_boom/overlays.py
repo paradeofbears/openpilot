@@ -26,10 +26,12 @@ from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lane_awareness import La
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lead_screen import lead_chevron
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mini_map import DM_CLEAR, MiniMap, location
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import SUPPORTED_MAPD_VERSIONS, RoadLoader
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom import points_hud
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import CHAOS, OFF
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import (
-  G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
+  G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, RANK_STYLE, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
 )
 from openpilot.selfdrive.ui.sunnypilot.onroad.chevron_metrics import ChevronOptions
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.traffic import TrafficBox, box_rect
@@ -54,6 +56,7 @@ class BoomBoomOverlays(Widget):
     self._enabled: dict[str, bool] = {}
     self.failed: set[str] = set()  # switched off for this drive after an exception
     self._mapd_version: str | None = None
+    self.rank_style = OFF
     self._reload_params()
     self._last_t = time.monotonic()
     self._started = False
@@ -81,6 +84,12 @@ class BoomBoomOverlays(Widget):
     if self._enabled.get(MINI_MAP):
       v = ui_state.params.get("MapdVersion")
       self._mapd_version = v.decode() if isinstance(v, bytes) else v
+    style = ui_state.params.get(RANK_STYLE)
+    self.rank_style = style if isinstance(style, int) and OFF <= style <= CHAOS else OFF
+
+  @property
+  def ranking(self) -> bool:
+    return self.rank_style != OFF and RANK_STYLE not in self.failed and SHARED not in self.failed
 
   def _mapd_format_ok(self) -> bool:
     # no version recorded means no mapd install and so no tiles: the map says NO MAP DATA on its own
@@ -169,8 +178,10 @@ class BoomBoomOverlays(Widget):
       self._guard(STEER_LIMIT_ARC, self.steer_arc.update, sm, self._rail(), dt)
     if self.on(G_METER):
       self._guard(G_METER, self.g_meter.update, sm, self._extra(extra, 'deviceMotion'), dt)
-    if self.on(TRIP_CARD):
-      self._guard(TRIP_CARD, self.trip_card.update, sm, ui_state.engaged, ui_state.has_longitudinal_control, self._gps(), dt)
+    if self.on(TRIP_CARD) or self.ranking:
+      flavour = self.rank_style if self.ranking else OFF
+      self._guard(TRIP_CARD, self.trip_card.update, sm, ui_state.engaged, ui_state.has_longitudinal_control, self._gps(), dt,
+                  flavour)
     if self.on(TRAFFIC):
       self._guard(TRAFFIC, self.traffic.update, sm, self._extra(extra, 'radarTracks'), ui_state.engaged)
     if self.on(LANE_AWARENESS):
@@ -216,6 +227,8 @@ class BoomBoomOverlays(Widget):
       self._guard(STEER_LIMIT_ARC, self.steer_arc.render, bottom, drawing=True)
     if self.on(SLOW_REASON):
       self._guard(SLOW_REASON, self.slow_reason.render, rect, drawing=True)
+    if self.ranking and TRIP_CARD not in self.failed:
+      self._guard(RANK_STYLE, points_hud.render, rect, self.trip_card.score, drawing=True)
     if self.on(TRIP_CARD):
       self._guard(TRIP_CARD, self.trip_card.render, rect, ui_state.is_metric, drawing=True)
 

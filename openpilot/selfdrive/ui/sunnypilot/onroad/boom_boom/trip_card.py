@@ -17,7 +17,9 @@ from opendbc.car.structs import car
 from openpilot.common.constants import CV
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.system.ui.lib.application import FontWeight, gui_app
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import FLAVOUR_NAMES, OFF, DriveScore, driver_in_control
 from openpilot.system.ui.lib.multilang import tr
+from openpilot.system.ui.lib.text_measure import measure_text_cached
 
 GearShifter = car.CarState.GearShifter
 
@@ -45,6 +47,15 @@ TITLE = rl.Color(255, 255, 255, 255)
 VALUE = rl.Color(255, 255, 255, 255)
 LABEL = rl.Color(255, 255, 255, 150)
 ACCENT = rl.Color(128, 216, 166, 255)
+BADGE_R = 72
+BADGE_SIZE = 110
+RANK_COLORS = {
+  "S": rl.Color(255, 200, 40, 255),   # gold
+  "A": rl.Color(128, 216, 166, 255),
+  "B": rl.Color(110, 170, 255, 255),
+  "C": rl.Color(200, 200, 200, 255),
+  "D": rl.Color(235, 90, 70, 255),
+}
 
 
 @dataclass
@@ -129,22 +140,30 @@ def fmt_duration(seconds: float) -> str:
 class TripCard:
   def __init__(self):
     self.stats = TripStats()
+    self.score = DriveScore()
     self._alpha = FirstOrderFilter(0.0, 0.25, 1 / gui_app.target_fps)
     self._show = False
     self._has_long = False
 
   def reset(self) -> None:
+    flavour = self.score.flavour
     self.stats = TripStats()
+    self.score = DriveScore(flavour=flavour)
     self._alpha.x = 0.0
     self._show = False
 
-  def update(self, sm, engaged: bool, has_long_control: bool, gps, dt: float) -> None:
+  def update(self, sm, engaged: bool, has_long_control: bool, gps, dt: float, flavour: int = OFF) -> None:
     cs = sm['carState']
     cc = sm['carControl']
     self._has_long = has_long_control
     fix = gps is not None and gps.hasFix
     self.stats.update(dt, cs.vEgo, cs.aEgo, cc.latActive, cc.longActive, engaged,
                       fix, gps.altitude if fix else 0.0, gps.verticalAccuracy if fix else 0.0)
+    self.score.flavour = flavour
+    if flavour != OFF:
+      lead = sm['radarState'].leadOne
+      driver = driver_in_control(cs.cruiseState.enabled, cc.longActive, cs.gasPressed)
+      self.score.update(dt, cs.vEgo, cs.aEgo, driver, lead.present, lead.dRel)
     parked = cs.gearShifter == GearShifter.park
     self._show = parked and self.stats.distance >= MIN_SHOW_DISTANCE
     self._alpha.update(1.0 if self._show else 0.0)
@@ -166,7 +185,7 @@ class TripCard:
     else:
       climb, fix = "-", tr("no fix")
 
-    return [
+    rows = [
       ((f"{dist:.1f} {dist_unit}", tr("distance")), (fmt_duration(s.total_t), tr("drive time"))),
       ((f"{avg:.0f} {speed_unit}", tr("average moving speed")), (f"{s.max_speed * speed_conv:.0f} {speed_unit}", tr("top speed"))),
       ((steered, tr("openpilot steered") + (tr(" / drove") if self._has_long else "")),
@@ -175,6 +194,11 @@ class TripCard:
        (f"{100 * s.share(s.smooth_t, s.moving_t):.0f}%", tr("smooth driving"))),
       ((climb, tr("climb / descent (GPS)")), (fix, tr("GPS fix while moving"))),
     ]
+    sc = self.score
+    if sc.flavour != OFF:
+      rows.append(((str(sc.tailgates), tr("tailgating (you driving)")),
+                   (f"{100 * s.share(sc.driver_distance, s.distance):.0f}%", tr("of the distance you drove"))))
+    return rows
 
   def render(self, rect: rl.Rectangle, is_metric: bool) -> None:
     a = self._alpha.x
@@ -201,6 +225,27 @@ class TripCard:
         rl.draw_text_ex(semi, value, rl.Vector2(cx, row_y + 14), VALUE_SIZE, 0, _fade(VALUE, a))
         rl.draw_text_ex(medium, label, rl.Vector2(cx, row_y + 14 + VALUE_SIZE + 4), LABEL_SIZE, 0, _fade(LABEL, a))
       row_y += ROW_H
+
+    if self.score.flavour != OFF:
+      self._draw_rank(x + PANEL_W - PAD - BADGE_R, y + PAD + BADGE_R, a, bold, medium)
+
+  def _draw_rank(self, cx: float, cy: float, a: float, bold: rl.Font, medium: rl.Font) -> None:
+    sc = self.score
+    letter = sc.rank()
+    color = RANK_COLORS.get(letter, LABEL)
+    rl.draw_circle_v(rl.Vector2(cx, cy), BADGE_R, _fade(rl.Color(255, 255, 255, 18), a))
+    rl.draw_ring(rl.Vector2(cx, cy), BADGE_R - 6, BADGE_R, 0, 360, 72, _fade(color, a))
+    text = letter or "-"
+    size = measure_text_cached(bold, text, BADGE_SIZE)
+    rl.draw_text_ex(bold, text, rl.Vector2(cx - size.x / 2, cy - size.y / 2), BADGE_SIZE, 0, _fade(color, a))
+
+    caption = tr(FLAVOUR_NAMES[sc.flavour] + " RANK") if letter else tr("drive 1 km yourself to rank")
+    lines = [(caption, LABEL_SIZE, LABEL), (f"{sc.points:,} " + tr("pts"), 40, VALUE)]
+    ty = cy + BADGE_R + 12
+    for text, size_px, col in lines:
+      ts = measure_text_cached(medium, text, size_px)
+      rl.draw_text_ex(medium, text, rl.Vector2(min(cx - ts.x / 2, cx + BADGE_R - ts.x), ty), size_px, 0, _fade(col, a))
+      ty += size_px + 8
 
 
 def _fade(c: rl.Color, a: float) -> rl.Color:
