@@ -10,7 +10,7 @@ paradeofbears/boom-boom
 
 boom-boom is my experimental branch of zoompilot, mostly new things to look at on the driving screen. Every feature below is **off by default**: the screen features switch on in **Settings > Visuals**, the sound ones in **Settings > Sounds**. They only display information or adjust sounds: none of them changes how the car steers, brakes or accelerates, and real alerts always draw on top of them. Newest first.
 
-- **Lead-time shift lights.** The shift lights flash when the revs would reach the 6,300 rpm redline within 0.6 s at their current rate of climb, or at a fixed shift point you choose.
+- **Lead-time shift lights.** The shift lights flash when the revs would reach the rev limit (5,900 rpm, measured from drive logs) within your chosen warning time at their current rate of climb, or at a fixed shift point you choose.
 - **Shift lights and shift chime.** In manual mode, a row of ten dots above the speed fills as the revs climb and flashes blue at the shift point, with an optional beep that never plays over an alert.
 - **Drive rank and arcade points.** In a Safety or Chaos style, the Park summary grades your own driving S to D while a running points score with combos sits beside the speed.
 - **Mini-map.** A small round map in the bottom-left corner turns with the car and highlights the road you are on, using the downloaded OpenStreetMap data.
