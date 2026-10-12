@@ -8,8 +8,9 @@ import pyray as rl
 
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.boom_boom import overlays as overlays_mod
-from openpilot.selfdrive.ui.boom_boom.toggles import G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC
+from openpilot.selfdrive.ui.boom_boom import compat, overlays as overlays_mod
+from openpilot.selfdrive.ui.boom_boom.mazda_can import Powertrain
+from openpilot.selfdrive.ui.boom_boom.toggles import G_METER, PARAMS, SHIFT_LIGHTS, SLOW_REASON, STEER_LIMIT_ARC
 
 
 def svc(name, fields=None):
@@ -103,3 +104,23 @@ class TestOverlayGuard(OpenpilotTestCase):
     overlays_mod.ui_state.started = True
     ov._update_state()
     assert G_METER not in ov.failed
+
+  def test_can_is_read_only_on_a_mazda(self):
+    taps = []
+    for brand, expect in ((None, 0), ("toyota", 0), ("mazda", 1)):
+      ov = self.make({SHIFT_LIGHTS})
+      overlays_mod.ui_state.CP = None if brand is None else SimpleNamespace(brand=brand)
+      ov._can_tap.update = lambda taps=taps: taps.append(1) or Powertrain()
+      before = len(taps)
+      ov._update_state()
+      assert len(taps) - before == expect, brand  # Mazda frame layouts mean nothing on another car
+
+
+class TestCompat(OpenpilotTestCase):
+  def test_missing_services_read_as_none(self):
+    assert compat.sp({}, "longitudinalPlanSP") is None
+    assert compat.sp({"longitudinalPlanSP": 1}, "longitudinalPlanSP") == 1
+
+  def test_mazda_check(self):
+    assert compat.is_mazda(SimpleNamespace(brand="mazda"))
+    assert not compat.is_mazda(SimpleNamespace(brand="honda")) and not compat.is_mazda(None)

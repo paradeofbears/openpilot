@@ -11,7 +11,10 @@ window, a slice of what is behind. With ReverseCameraView on, these replace the 
 """
 import pyray as rl
 from opendbc.car.structs import car
-from openpilot.cereal.visionipc import VisionStreamType
+try:
+  from openpilot.cereal.visionipc import VisionStreamType
+except ImportError:  # stock openpilot
+  from msgq.visionipc import VisionStreamType  # type: ignore[no-redef]
 from openpilot.selfdrive.ui.onroad.cameraview import CameraView
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.multilang import tr

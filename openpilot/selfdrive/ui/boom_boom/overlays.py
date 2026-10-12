@@ -18,9 +18,10 @@ from collections.abc import Callable
 
 import pyray as rl
 
-from opendbc.sunnypilot.car.interfaces import get_steer_rail_schedule
-from openpilot.cereal import messaging
 from openpilot.common.swaglog import cloudlog
+from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.system.ui.widgets import Widget
+
 from .g_meter import FOOTPRINT_H as G_METER_H, GMeter
 from .lane_awareness import LaneAwareness
 from .lead_screen import lead_chevron
@@ -34,17 +35,16 @@ from .shift_lights import (
 )
 from .slow_reason import SlowReasonPill
 from .steer_limit_arc import SteerLimitArc
+from .compat import (
+  ChevronOptions, DeveloperUiState, get_bottom_dev_ui_offset, get_steer_rail_schedule, is_mazda, messaging, sp,
+)
 from .store import settings
 from .toggles import (
   G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, RANK_STYLE, SHIFT_CHIME, SHIFT_CHIME_REQUEST, SHIFT_LIGHTS, SHIFT_POINT,
   SHIFT_LEAD, SHIFT_REV_LIMIT, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
 )
-from openpilot.selfdrive.ui.sunnypilot.onroad.chevron_metrics import ChevronOptions
 from .traffic import TrafficBox, box_rect
 from .trip_card import TripCard
-from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiState, get_bottom_dev_ui_offset
-from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.system.ui.widgets import Widget
 
 PARAM_RELOAD_FRAMES = 30
 MAX_DT = 0.2  # s; a stalled frame must not count as a long stretch of driving
@@ -53,6 +53,11 @@ DEV_UI_RIGHT_W = 230  # px the developer UI's right column takes
 SHARED = "shared"  # the guard's name for this file's own code
 MAPD_ROOT = "/data/media/0/osm"  # Paths.mapd_root() on the device
 MARGIN_BOTTOM = 50  # px from the bottom edge for widgets with nothing under them
+
+
+def _road_name(sm) -> str:
+  m = sp(sm, 'liveMapDataSP')
+  return m.roadName if m is not None else ""
 
 
 def _option(index, options: tuple, default):
@@ -172,7 +177,8 @@ class BoomBoomOverlays(Widget):
   def _gps():
     """The best live GPS message, or None: one with a fix first, the external receiver before the modem's."""
     sm = ui_state.sm
-    live = [sm[name] for name in ('gpsLocationExternal', 'gpsLocation') if sm.alive[name] and sm.valid[name]]
+    live = [sm[name] for name in ('gpsLocationExternal', 'gpsLocation')
+            if name in sm.alive and sm.alive[name] and sm.valid[name]]  # a build may subscribe to only one
     return next((g for g in live if g.hasFix), live[0] if live else None)
 
   def _update_state(self) -> None:
@@ -204,7 +210,7 @@ class BoomBoomOverlays(Widget):
     if self.on(G_METER):
       self._guard(G_METER, self.g_meter.update, sm, self._extra(extra, 'deviceMotion'), dt)
     pt = None
-    if self.on(SHIFT_LIGHTS) or self.ranking:
+    if (self.on(SHIFT_LIGHTS) or self.ranking) and is_mazda(ui_state.CP):  # the frames it decodes are Mazda's
       pt = self._guard(SHIFT_LIGHTS, self._can_tap.update)
     else:
       self._can_tap.close()
@@ -234,7 +240,7 @@ class BoomBoomOverlays(Widget):
     where = location(llk)
     if where is not None and self._mapd_format_ok():
       loader.request(where[0], where[1])
-    self.mini_map.update(llk, loader.latest, loader.error, self._mapd_format_ok(), sm['liveMapDataSP'].roadName,
+    self.mini_map.update(llk, loader.latest, loader.error, self._mapd_format_ok(), _road_name(sm),
                          sm['carState'].vEgo)
 
   def _render(self, rect: rl.Rectangle) -> None:
@@ -245,14 +251,14 @@ class BoomBoomOverlays(Widget):
     bottom = rl.Rectangle(rect.x, rect.y, rect.width, rect.height - get_bottom_dev_ui_offset())
     if self.on(LANE_AWARENESS):
       # edges first: everything else draws over the glow
-      metric_lines = {ChevronOptions.OFF: 0, ChevronOptions.ALL: 3}.get(ui_state.chevron_metrics, 1)
+      metric_lines = {ChevronOptions.OFF: 0, ChevronOptions.ALL: 3}.get(getattr(ui_state, "chevron_metrics", 0), 1)
       self._guard(LANE_AWARENESS, self._draw_lane_awareness, rect, metric_lines, drawing=True)
     # the driver monitoring icon takes the bottom corner on the driver's side
     g_meter_right = self.on(G_METER) and not ui_state.sm['driverMonitoringState'].isRHD
     if self.on(G_METER):
       self._guard(G_METER, self.g_meter.render, bottom, not g_meter_right, drawing=True)
     if self.on(TRAFFIC):
-      inset = DEV_UI_RIGHT_W if ui_state.developer_ui in (DeveloperUiState.RIGHT, DeveloperUiState.BOTH) else 0
+      inset = DEV_UI_RIGHT_W if getattr(ui_state, "developer_ui", 0) in (DeveloperUiState.RIGHT, DeveloperUiState.BOTH) else 0
       box = box_rect(bottom, inset, G_METER_H + STACK_GAP if g_meter_right else 0)
       if box is not None:
         self._guard(TRAFFIC, self.traffic.render, box, drawing=True)

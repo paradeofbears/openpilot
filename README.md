@@ -8,8 +8,11 @@ paradeofbears/boom-boom
 
 ## boom-boom changelog
 
-boom-boom is my experimental branch of zoompilot, mostly new things to look at on the driving screen. Every feature below is **off by default**: the screen features switch on in **Settings > Visuals**, the sound ones in **Settings > Sounds**. They only display information or adjust sounds: none of them changes how the car steers, brakes or accelerates, and real alerts always draw on top of them. Newest first.
+boom-boom is my experimental branch of zoompilot, mostly new things to look at on the driving screen. Every feature below is **off by default**: the screen features switch on in **Settings > Boom-boom**, the sound ones in **Settings > Sounds**. They only display information or adjust sounds: none of them changes how the car steers, brakes or accelerates, and real alerts always draw on top of them. Newest first.
 
+- **Boom-boom settings page.** Every screen feature now has its own Boom-boom page in Settings, and the code is one self-contained folder that can be added to other openpilot builds ([INTEGRATION.md](openpilot/selfdrive/ui/boom_boom/INTEGRATION.md)).
+- **Drive map.** The Park summary shows a map of the drive with each corner, launch and stop marked clean or to work on.
+- **Spirited style that rewards control.** Spirited scores clean launches, controlled stops, steady cornering and well-timed shifts, never speed or hard braking, and only ranks a drive with enough spirited moments.
 - **Deeper drive rank.** The rank now comes from four sub-scores, shown as bars in the Park summary, built from smooth stops, following distance, attention, revs, cornering and shifts, with personal bests and rank streaks remembered across drives.
 - **Lead-time shift lights.** The shift lights flash when the revs would reach the rev limit (5,900 rpm, measured from drive logs) within your chosen warning time at their current rate of climb, or at a fixed shift point you choose.
 - **Shift lights and shift chime.** In manual mode, a row of ten dots above the speed fills as the revs climb and flashes blue at the shift point, with an optional beep that never plays over an alert.

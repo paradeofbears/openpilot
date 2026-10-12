@@ -86,7 +86,7 @@ class CanTap:
         self._values[name] = (v, now)
 
   def update(self) -> Powertrain:
-    from openpilot.cereal import messaging
+    from .compat import messaging
     if self._sock is None:
       self._sock = messaging.sub_sock("can", conflate=False)
     now = time.monotonic()

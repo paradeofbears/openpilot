@@ -25,6 +25,8 @@ from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 
+from .compat import sp
+
 # forward distance (m) to height fraction, compressed so near traffic gets most of the box
 D_BP = [-12.0, 0.0, 15.0, 40.0, 80.0]
 D_FRAC = [0.0, 0.17, 0.45, 0.73, 1.0]
@@ -141,8 +143,9 @@ class TrafficBox:
     self.blink_left, self.blink_right = cs.leftBlinker, cs.rightBlinker
     self.engaged = engaged
     # the green-light and lead-departure circles sit on the right too; they win
-    alerts = sm['longitudinalPlanSP'].e2eAlerts
-    self._alpha.update(0.0 if alerts.greenLightAlert or alerts.leadDepartAlert else 1.0)
+    plan_sp = sp(sm, 'longitudinalPlanSP')
+    alerts = plan_sp.e2eAlerts if plan_sp is not None else None
+    self._alpha.update(0.0 if alerts is not None and (alerts.greenLightAlert or alerts.leadDepartAlert) else 1.0)
 
   def render(self, rect: rl.Rectangle) -> None:
     a = self._alpha.x

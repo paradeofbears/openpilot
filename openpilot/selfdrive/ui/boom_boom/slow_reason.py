@@ -10,15 +10,15 @@ the speed and openpilot's plan is not what the car does, so the label stays hidd
 """
 import pyray as rl
 
-from openpilot.cereal import custom, log
 from openpilot.common.constants import CV
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 
+from .compat import PlanSourceSP, log, sp
+
 PlanSource = log.LongitudinalPlan.LongitudinalPlanSource
-PlanSourceSP = custom.LongitudinalPlanSP.LongitudinalPlanSource
 
 V_CRUISE_UNSET_KPH = 255  # carState.vCruise when no set speed
 DECEL_SHOW = -0.3         # m/s^2: a planned decel this firm is worth explaining
@@ -60,12 +60,13 @@ def slowdown_reason(long_active: bool, v_ego: float, v_cruise_kph: float, a_targ
   lead = source in (PlanSource.lead0, PlanSource.lead1, PlanSource.lead2)
   if should_stop:
     return STOPPED_FOR_CAR if lead and v_ego < STOPPED_SPEED else STOPPING
-  if source_sp == PlanSourceSP.speedLimitAssist:
-    return SPEED_LIMIT
-  if source_sp == PlanSourceSP.sccVision:
-    return CURVE
-  if source_sp == PlanSourceSP.sccMap:
-    return CURVE_MAP
+  if PlanSourceSP is not None and source_sp is not None:  # sunnypilot's own planners
+    if source_sp == PlanSourceSP.speedLimitAssist:
+      return SPEED_LIMIT
+    if source_sp == PlanSourceSP.sccVision:
+      return CURVE
+    if source_sp == PlanSourceSP.sccMap:
+      return CURVE_MAP
   if lead:
     return STOPPED_FOR_CAR if v_ego < STOPPED_SPEED else FOLLOWING
   if source == PlanSource.e2e:
@@ -122,8 +123,9 @@ class SlowReasonPill:
     cs = sm['carState']
     plan = sm['longitudinalPlan']
     long_active = has_long_control and sm['carControl'].longActive
+    plan_sp = sp(sm, 'longitudinalPlanSP')
     reason = slowdown_reason(long_active, cs.vEgo, cs.vCruise, plan.aTarget, plan.shouldStop,
-                             plan.longitudinalPlanSource, sm['longitudinalPlanSP'].longitudinalPlanSource)
+                             plan.longitudinalPlanSource, plan_sp.longitudinalPlanSource if plan_sp is not None else None)
     shown = self._debouncer.update(reason, dt)
     if shown is not None:
       self._text = shown
