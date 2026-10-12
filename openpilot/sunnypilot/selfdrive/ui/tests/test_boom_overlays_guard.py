@@ -37,6 +37,9 @@ class FakeParams:
   def get_bool(self, key):
     return key in self.on
 
+  def get(self, key):
+    return None
+
 
 def fake_ui_state(on):
   return SimpleNamespace(params=FakeParams(on), started=True, started_frame=0, sm=FakeSM(), CP=None,

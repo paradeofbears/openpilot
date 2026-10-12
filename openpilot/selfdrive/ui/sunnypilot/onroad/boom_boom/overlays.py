@@ -12,6 +12,7 @@ for the rest of the drive and logs it, instead of taking down the onroad screen 
 draws). A failure in the shared code here switches all of them off for the drive. Any clipping a
 failed widget left on is cleared so it cannot hide what draws after it.
 """
+import os
 import time
 from collections.abc import Callable
 
@@ -23,10 +24,12 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.g_meter import FOOTPRINT_H as G_METER_H, GMeter
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lane_awareness import LaneAwareness
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lead_screen import lead_chevron
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mini_map import DM_CLEAR, MiniMap, location
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import SUPPORTED_MAPD_VERSIONS, RoadLoader
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import (
-  G_METER, LANE_AWARENESS, PARAMS, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
+  G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
 )
 from openpilot.selfdrive.ui.sunnypilot.onroad.chevron_metrics import ChevronOptions
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.traffic import TrafficBox, box_rect
@@ -40,6 +43,8 @@ MAX_DT = 0.2  # s; a stalled frame must not count as a long stretch of driving
 STACK_GAP = 30  # px between the traffic box and the G-meter under it
 DEV_UI_RIGHT_W = 230  # px the developer UI's right column takes
 SHARED = "shared"  # the guard's name for this file's own code
+MAPD_ROOT = "/data/media/0/osm"  # Paths.mapd_root() on the device
+MARGIN_BOTTOM = 50  # px from the bottom edge for widgets with nothing under them
 
 
 class BoomBoomOverlays(Widget):
@@ -48,6 +53,7 @@ class BoomBoomOverlays(Widget):
     self._frame = 0
     self._enabled: dict[str, bool] = {}
     self.failed: set[str] = set()  # switched off for this drive after an exception
+    self._mapd_version: str | None = None
     self._reload_params()
     self._last_t = time.monotonic()
     self._started = False
@@ -64,11 +70,21 @@ class BoomBoomOverlays(Widget):
     self.trip_card = TripCard()
     self.traffic = TrafficBox()
     self.lane_awareness = LaneAwareness()
-    self._widgets = (self.slow_reason, self.steer_arc, self.g_meter, self.trip_card, self.traffic, self.lane_awareness)
+    self.mini_map = MiniMap()
+    self._road_loader: RoadLoader | None = None  # started the first time the mini-map is on
+    self._widgets = (self.slow_reason, self.steer_arc, self.g_meter, self.trip_card, self.traffic, self.lane_awareness,
+                     self.mini_map)
 
   def _reload_params(self) -> None:
     for p in PARAMS:
       self._enabled[p] = ui_state.params.get_bool(p)
+    if self._enabled.get(MINI_MAP):
+      v = ui_state.params.get("MapdVersion")
+      self._mapd_version = v.decode() if isinstance(v, bytes) else v
+
+  def _mapd_format_ok(self) -> bool:
+    # no version recorded means no mapd install and so no tiles: the map says NO MAP DATA on its own
+    return self._mapd_version is None or self._mapd_version in SUPPORTED_MAPD_VERSIONS
 
   def on(self, param: str) -> bool:
     return self._enabled.get(param, False) and param not in self.failed and SHARED not in self.failed
@@ -103,6 +119,8 @@ class BoomBoomOverlays(Widget):
       services.append('deviceMotion')
     if self.on(TRAFFIC) and not ui_state.has_longitudinal_control:
       services.append('radarTracks')  # alpha long silences the radar, so there are none to read
+    if self.on(MINI_MAP):
+      services.append('liveLocationKalman')
     if tuple(services) != self._sm_services:
       self._sm_services = tuple(services)
       self._sm = messaging.SubMaster(services) if services else None
@@ -157,6 +175,18 @@ class BoomBoomOverlays(Widget):
       self._guard(TRAFFIC, self.traffic.update, sm, self._extra(extra, 'radarTracks'), ui_state.engaged)
     if self.on(LANE_AWARENESS):
       self._guard(LANE_AWARENESS, self.lane_awareness.update, sm, dt)
+    if self.on(MINI_MAP):
+      self._guard(MINI_MAP, self._update_mini_map, sm, self._extra(extra, 'liveLocationKalman'))
+
+  def _update_mini_map(self, sm, llk) -> None:
+    if self._road_loader is None:
+      self._road_loader = RoadLoader(os.path.join(MAPD_ROOT, "offline"))
+    loader = self._road_loader
+    where = location(llk)
+    if where is not None and self._mapd_format_ok():
+      loader.request(where[0], where[1])
+    self.mini_map.update(llk, loader.latest, loader.error, self._mapd_format_ok(), sm['liveMapDataSP'].roadName,
+                         sm['carState'].vEgo)
 
   def _render(self, rect: rl.Rectangle) -> None:
     if self._fresh():
@@ -177,6 +207,11 @@ class BoomBoomOverlays(Widget):
       box = box_rect(bottom, inset, G_METER_H + STACK_GAP if g_meter_right else 0)
       if box is not None:
         self._guard(TRAFFIC, self.traffic.render, box, drawing=True)
+    if self.on(MINI_MAP):
+      # bottom-left: above the driver monitoring icon, or above the G-meter when right-hand drive puts it there
+      rhd = ui_state.sm['driverMonitoringState'].isRHD
+      clear = (G_METER_H + STACK_GAP + MARGIN_BOTTOM if self.on(G_METER) else MARGIN_BOTTOM) if rhd else DM_CLEAR
+      self._guard(MINI_MAP, self.mini_map.render, bottom, clear, drawing=True)
     if self.on(STEER_LIMIT_ARC):
       self._guard(STEER_LIMIT_ARC, self.steer_arc.render, bottom, drawing=True)
     if self.on(SLOW_REASON):

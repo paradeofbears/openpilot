@@ -14,8 +14,9 @@ G_METER = "GForceMeter"
 TRIP_CARD = "TripSummary"
 TRAFFIC = "TrafficBox"
 LANE_AWARENESS = "LaneAwareness"
+MINI_MAP = "MiniMap"
 
-PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD, TRAFFIC, LANE_AWARENESS)
+PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD, TRAFFIC, LANE_AWARENESS, MINI_MAP)
 
 
 def toggle_defs() -> dict:
@@ -65,6 +66,13 @@ def toggle_defs() -> dict:
          "chevron, a bar of the time gap to it against your follow-distance setting, with a closing or opening " +
          "arrow and BRAKING when it slows hard. The gap bar needs openpilot longitudinal (alpha long), which is " +
          "what draws the chevron."),
+      None,
+    ),
+    MINI_MAP: (
+      lambda: tr("Mini-Map"),
+      tr("A small round heading-up map in the bottom-left corner, drawn from the OpenStreetMap data downloaded " +
+         "in the OSM panel, with the road you are on highlighted and the zoom widening with speed. Needs a " +
+         "map download for the area and a GPS fix; it says NO GPS or NO MAP DATA rather than guess. Display only."),
       None,
     ),
   }
