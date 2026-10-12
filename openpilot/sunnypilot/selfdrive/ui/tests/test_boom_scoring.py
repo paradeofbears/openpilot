@@ -5,7 +5,7 @@ See the LICENSE.md file in the root directory for more details.
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
-  BLIND_SPOT_POINTS, CHAOS, CLEAN_POINTS, DISTRACTED_POINTS, LAUNCH_POINTS, LIMITER_POINTS, MIN_RANK_DISTANCE, MPH,
+  BLIND_SPOT_POINTS, SPIRITED, CLEAN_POINTS, DISTRACTED_POINTS, LAUNCH_POINTS, LIMITER_POINTS, MIN_RANK_DISTANCE, MPH,
   PERFECT_SHIFT_POINTS, SAFETY, SMOOTH_STOP_POINTS, STOP_POINTS, STREAK_MAX, TAILGATE_HOLD, TAILGATE_POINTS, WEAK_LINK,
   DriveScore, Extra, driver_in_control, rank_letter,
 )
@@ -39,11 +39,11 @@ class TestEvents(OpenpilotTestCase):
     assert (s.hard_brakes, s.hard_launches) == (1, 1)
 
   def test_tailgating_needs_speed_and_time_and_counts_once(self):
-    s = DriveScore(flavour=CHAOS)
+    s = DriveScore(flavour=SPIRITED)
     drive(s, TAILGATE_HOLD - 0.5, v=25.0, lead=True, d_rel=15.0)  # 0.6 s gap, not long enough yet
     assert s.tailgates == 0
     drive(s, 5.0, v=25.0, lead=True, d_rel=15.0)
-    assert s.tailgates == 1 and s.points == TAILGATE_POINTS  # tailgating costs points in chaos too
+    assert s.tailgates == 1 and s.points == TAILGATE_POINTS  # tailgating costs points in spirited too
     drive(s, 10.0, v=8.0, lead=True, d_rel=5.0)  # town crawl: not tailgating
     drive(s, 2.0, v=25.0, lead=True, d_rel=50.0)  # gap opens: episode over
     drive(s, 5.0, v=25.0, lead=True, d_rel=15.0)
@@ -68,8 +68,8 @@ class TestPoints(OpenpilotTestCase):
     drive(s, 0.5)
     assert s.streak == 1 and any("STREAK LOST" in p.text for p in s.popups)
 
-  def test_chaos_scores_events_and_chains_combos(self):
-    s = DriveScore(flavour=CHAOS)
+  def test_spirited_scores_events_and_chains_combos(self):
+    s = DriveScore(flavour=SPIRITED)
     drive(s, 0.5, a=3.0)
     drive(s, 0.5)
     first = s.points
@@ -84,8 +84,8 @@ class TestPoints(OpenpilotTestCase):
     drive(s, 0.5)
     assert s.points == first + 4 * STOP_POINTS * 2 + first
 
-  def test_chaos_never_scores_speed(self):
-    s = DriveScore(flavour=CHAOS)
+  def test_spirited_never_scores_speed(self):
+    s = DriveScore(flavour=SPIRITED)
     drive(s, 60.0, v=45.0)
     assert s.points == 0
 
@@ -102,7 +102,7 @@ class TestRank(OpenpilotTestCase):
     assert s.rank() == "S"
 
   def test_flavours_disagree_about_the_same_drive(self):
-    calm, wild = DriveScore(flavour=SAFETY), DriveScore(flavour=CHAOS)
+    calm, wild = DriveScore(flavour=SAFETY), DriveScore(flavour=SPIRITED)
     for s in (calm, wild):
       drive(s, 100.0)  # 2 km smooth
     assert (calm.rank(), wild.rank()) == ("S", "D")
@@ -123,10 +123,10 @@ class TestTripCardScore(OpenpilotTestCase):
           "carControl": svc("carControl", {}), "radarState": svc("radarState", {})}
     card = TripCard()
     for _ in range(20):
-      card.update(sm, False, True, None, DT, CHAOS)
-    assert card.score.hard_launches == 1 and card.score.flavour == CHAOS
+      card.update(sm, False, True, None, DT, SPIRITED)
+    assert card.score.hard_launches == 1 and card.score.flavour == SPIRITED
     card.reset()
-    assert card.score.flavour == CHAOS and card.score.points == 0
+    assert card.score.flavour == SPIRITED and card.score.points == 0
 
 
 class TestRicherMetrics(OpenpilotTestCase):
@@ -150,7 +150,7 @@ class TestRicherMetrics(OpenpilotTestCase):
     assert (s.stops, s.smooth_stops) == (2, 1)
 
   def test_hard_corner_and_peak_g(self):
-    s = DriveScore(flavour=CHAOS)
+    s = DriveScore(flavour=SPIRITED)
     drive(s, 0.3, x=Extra(lat_g=0.4))  # too short to count
     drive(s, 1.0, x=Extra(lat_g=0.1))
     assert s.hard_corners == 0
@@ -179,7 +179,7 @@ class TestRicherMetrics(OpenpilotTestCase):
     assert abs(s.dm_t - 4.5) < 0.1
 
   def test_signalling_into_an_occupied_blind_spot(self):
-    s = DriveScore(flavour=CHAOS)
+    s = DriveScore(flavour=SPIRITED)
     drive(s, 1.0, x=Extra(blinker_left=True))  # nothing there
     drive(s, 1.0, x=Extra())
     drive(s, 1.0, x=Extra(blinker_right=True, blind_spot_right=True))  # held on: counts once
@@ -194,7 +194,7 @@ class TestRicherMetrics(OpenpilotTestCase):
     assert abs(s.over_limit_t / s.limit_t - 0.5) < 0.01
 
   def test_eco_limiter_and_perfect_shifts(self):
-    s = DriveScore(flavour=CHAOS)
+    s = DriveScore(flavour=SPIRITED)
     drive(s, 10.0, x=Extra(rpm=1800.0, pedal=300.0, gear=3, manual=True))
     assert abs(s.eco_t - 10.0) < 0.1
     drive(s, 0.5, x=Extra(rpm=5400.0, pedal=2000.0, gear=3, manual=True))
@@ -206,14 +206,14 @@ class TestRicherMetrics(OpenpilotTestCase):
     assert s.points == PERFECT_SHIFT_POINTS + LIMITER_POINTS
 
   def test_launch_times(self):
-    s = DriveScore(flavour=CHAOS)
+    s = DriveScore(flavour=SPIRITED)
     drive(s, 1.0, v=0.0)
     for i in range(200):  # 3 m/s^2 from a standstill
       s.update(DT, (i + 1) * DT * 3.0, 3.0, True, False, 100.0)
     # timed from MOVING, so the first fraction of a second of creep is not counted
     assert abs(s.best_0_30 - 30 * MPH / 3.0) < 0.2
     assert abs(s.best_0_60 - 60 * MPH / 3.0) < 0.2
-    blocked = DriveScore(flavour=CHAOS)
+    blocked = DriveScore(flavour=SPIRITED)
     drive(blocked, 1.0, v=0.0, lead=True, d_rel=8.0)  # pulling away behind a car is not a launch run
     drive(blocked, 20.0, v=20.0)
     assert blocked.best_0_30 is None
@@ -237,10 +237,10 @@ class TestSubScores(OpenpilotTestCase):
 class TestCardHighlights(OpenpilotTestCase):
   def test_highlights_follow_the_flavour_and_show_dashes_without_data(self):
     card = TripCard()
-    card.score = DriveScore(flavour=CHAOS)
+    card.score = DriveScore(flavour=SPIRITED)
     values = {label: value for value, label in card.highlights()}
     assert len(values) == 6 and values["peak cornering"] == "-" and values["perfect shifts"] == "-"
-    card.score = DriveScore(flavour=CHAOS, lat_t=10.0, peak_lat_g=0.41, manual_t=5.0, upshifts=4, perfect_shifts=3,
+    card.score = DriveScore(flavour=SPIRITED, lat_t=10.0, peak_lat_g=0.41, manual_t=5.0, upshifts=4, perfect_shifts=3,
                             best_0_30=5.3, best_0_60=12.4)
     values = {label: value for value, label in card.highlights()}
     assert values["peak cornering"] == "0.41 g" and values["perfect shifts"] == "3/4" and values["best 0-60 mph"] == "12.4 s"

@@ -13,7 +13,7 @@ boom-boom is my experimental branch of zoompilot, mostly new things to look at o
 - **Deeper drive rank.** The rank now comes from four sub-scores, shown as bars in the Park summary, built from smooth stops, following distance, attention, revs, cornering and shifts, with personal bests and rank streaks remembered across drives.
 - **Lead-time shift lights.** The shift lights flash when the revs would reach the rev limit (5,900 rpm, measured from drive logs) within your chosen warning time at their current rate of climb, or at a fixed shift point you choose.
 - **Shift lights and shift chime.** In manual mode, a row of ten dots above the speed fills as the revs climb and flashes blue at the shift point, with an optional beep that never plays over an alert.
-- **Drive rank and arcade points.** In a Safety or Chaos style, the Park summary grades your own driving S to D while a running points score with combos sits beside the speed.
+- **Drive rank and arcade points.** In a Safety or Spirited style, the Park summary grades your own driving S to D while a running points score with combos sits beside the speed.
 - **Mini-map.** A small round map in the bottom-left corner turns with the car and highlights the road you are on, using the downloaded OpenStreetMap data.
 - **Failure guard.** A widget that hits an error switches itself off for the rest of the drive instead of taking down the driving screen and its alerts.
 - **Lane awareness.** An amber edge glow marks a car in your blind spot, and a bar under the lead car shows your time gap against your follow-distance setting.

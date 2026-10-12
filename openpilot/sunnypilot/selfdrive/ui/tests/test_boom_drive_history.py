@@ -6,7 +6,7 @@ from openpilot.common.test import OpenpilotTestCase
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_history import (
   HISTORY, MAX_DRIVES, DriveHistory, line, record, summary,
 )
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import CHAOS, SAFETY, DriveScore
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import SPIRITED, SAFETY, DriveScore
 
 
 def d(i, rank="A", points=1000, flavour=SAFETY, best_0_30=None):
@@ -33,7 +33,7 @@ class TestHistory(OpenpilotTestCase):
     assert len(drives) == MAX_DRIVES and drives[0]["id"] == 1 and drives[-1]["id"] == 100
 
   def test_bests_and_streak_count_only_the_same_style(self):
-    drives = [d(1, "B"), d(2, "A", 3000), d(3, "S", 2000), d(4, "D", 9000, flavour=CHAOS)]
+    drives = [d(1, "B"), d(2, "A", 3000), d(3, "S", 2000), d(4, "D", 9000, flavour=SPIRITED)]
     s = summary(drives, d(5, "A", 4000))
     assert s == {"best_points": 3000, "new_best": True, "new_launch_best": False, "streak": 3}
     assert line(s) == "NEW BEST  |  3 in a row A+"

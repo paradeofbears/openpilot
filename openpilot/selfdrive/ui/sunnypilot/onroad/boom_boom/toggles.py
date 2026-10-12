@@ -15,7 +15,7 @@ TRIP_CARD = "TripSummary"
 TRAFFIC = "TrafficBox"
 LANE_AWARENESS = "LaneAwareness"
 MINI_MAP = "MiniMap"
-RANK_STYLE = "TripRankStyle"  # 0 off, 1 safety, 2 chaos (scoring.py)
+RANK_STYLE = "TripRankStyle"  # 0 off, 1 safety, 2 spirited (scoring.py)
 SHIFT_LIGHTS = "ShiftLights"
 SHIFT_CHIME = "ShiftChime"            # read by soundd too (sunnypilot/selfdrive/ui/shift_chime.py)
 SHIFT_REV_LIMIT = "ShiftRevLimit"     # index into shift_lights.REV_LIMIT_OPTIONS
@@ -35,10 +35,10 @@ def extra_items(params) -> list:
     multiple_button_item_sp(
       title=lambda: tr("Drive Rank and Points"),
       description=lambda: tr("Rank your own driving S to D and score points while you drive. Safety rewards smooth " +
-                             "driving; Chaos rewards hard launches and stops, never speed. Tailgating costs points in " +
+                             "driving; Spirited rewards hard launches and stops, never speed. Tailgating costs points in " +
                              "both. Only stretches where you set the speed count, not openpilot or cruise. The rank " +
                              "shows on the Park summary; the points to the right of the speed."),
-      buttons=[lambda: tr("Off"), lambda: tr("Safety"), lambda: tr("Chaos")],
+      buttons=[lambda: tr("Off"), lambda: tr("Safety"), lambda: tr("Spirited")],
       selected_index=int(selected),
       param=RANK_STYLE,
       inline=False,

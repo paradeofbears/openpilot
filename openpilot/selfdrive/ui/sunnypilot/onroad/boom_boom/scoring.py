@@ -12,7 +12,7 @@ driver's. Rates are per 10 km of that distance; the points do not feed the rank.
 SAFETY sub-scores: Smoothness (hard brakes and launches, jerk, hard corners, steering, smooth stops),
 Following (tailgating, average time gap, closest time to collision), Awareness (distraction, signalling into
 an occupied blind spot, speed over a known limit), Engine (economical revs and throttle, no limiter hits).
-CHAOS sub-scores: Aggression (hard launches and stops), Cornering (peak lateral G), Shifting (perfect shifts
+SPIRITED sub-scores: Aggression (hard launches and stops), Cornering (peak lateral G), Shifting (perfect shifts
 in manual mode, limiter hits cost), and Discipline (Following and Awareness, the same penalties as Safety).
 
 A sub-score with no data is left out (None) rather than counted as zero, and the rank is the weighted mean of
@@ -27,11 +27,11 @@ any detector would risk accusing the driver of something they did not do. Displa
 import math
 from dataclasses import dataclass, field
 
-OFF, SAFETY, CHAOS = 0, 1, 2
-FLAVOUR_NAMES = {SAFETY: "SAFETY", CHAOS: "CHAOS"}
+OFF, SAFETY, SPIRITED = 0, 1, 2
+FLAVOUR_NAMES = {SAFETY: "SAFETY", SPIRITED: "SPIRITED"}
 SUB_NAMES = {SAFETY: ("SMOOTH", "FOLLOWING", "AWARENESS", "ENGINE"),
-             CHAOS: ("AGGRESSION", "CORNERING", "SHIFTING", "DISCIPLINE")}
-WEIGHTS = {SAFETY: (45, 20, 20, 15), CHAOS: (35, 20, 20, 25)}
+             SPIRITED: ("AGGRESSION", "CORNERING", "SHIFTING", "DISCIPLINE")}
+WEIGHTS = {SAFETY: (45, 20, 20, 15), SPIRITED: (35, 20, 20, 25)}
 WEAK_LINK = 40.0           # the rank is never more than this above the weakest sub-score
 SMOOTH_DECAY = 30.0        # weighted incidents per 10 km that take Smoothness to 37
 
@@ -48,7 +48,7 @@ HARSH_JERK_EXIT = 3.0
 HARD_CORNER_G = 0.3        # lateral G held HARD_CORNER_HOLD counts as a hard corner (reference p99 0.27 g)
 HARD_CORNER_EXIT_G = 0.2
 HARD_CORNER_HOLD = 0.5
-BIG_CORNER_G = 0.35        # chaos: a corner past this scores
+BIG_CORNER_G = 0.35        # spirited: a corner past this scores
 STEER_FAST = 90.0          # deg/s at speed counts as a jerky steering input
 STEER_FAST_SPEED = 15.0    # m/s; below this, fast steering is turning at junctions and parking
 STOP_WINDOW_T = 3.0        # s before standstill a stop is judged over
@@ -83,13 +83,13 @@ STREAK_MAX = 5
 TAILGATE_POINTS = -100 * POINTS_SCALE
 BLIND_SPOT_POINTS = -100 * POINTS_SCALE
 DISTRACTED_POINTS = -50 * POINTS_SCALE
-LIMITER_POINTS = -50 * POINTS_SCALE   # chaos; in safety a limiter hit breaks the streak instead
+LIMITER_POINTS = -50 * POINTS_SCALE   # spirited; in safety a limiter hit breaks the streak instead
 SMOOTH_STOP_POINTS = 20 * POINTS_SCALE  # safety
-LAUNCH_POINTS = 100 * POINTS_SCALE  # chaos, per m/s^2 of peak acceleration
-STOP_POINTS = 50 * POINTS_SCALE     # chaos, per m/s^2 of peak deceleration
-CORNER_POINTS = 400 * POINTS_SCALE  # chaos, per g of peak lateral acceleration
-PERFECT_SHIFT_POINTS = 150 * POINTS_SCALE  # chaos
-COMBO_WINDOW_S = 10.0      # chaos: events this close together chain
+LAUNCH_POINTS = 100 * POINTS_SCALE  # spirited, per m/s^2 of peak acceleration
+STOP_POINTS = 50 * POINTS_SCALE     # spirited, per m/s^2 of peak deceleration
+CORNER_POINTS = 400 * POINTS_SCALE  # spirited, per g of peak lateral acceleration
+PERFECT_SHIFT_POINTS = 150 * POINTS_SCALE  # spirited
+COMBO_WINDOW_S = 10.0      # spirited: events this close together chain
 COMBO_MAX = 3
 POPUP_T = 1.6              # s a popup stays on screen
 
@@ -311,8 +311,8 @@ class DriveScore:
         if self.flavour == SAFETY:
           self._incident("CORNER")
     elif g < HARD_CORNER_EXIT_G:
-      if self._cornering and self.flavour == CHAOS and self._corner_peak >= BIG_CORNER_G:
-        self._chaos_points("CORNER", int(round(CORNER_POINTS * self._corner_peak)))
+      if self._cornering and self.flavour == SPIRITED and self._corner_peak >= BIG_CORNER_G:
+        self._spirited_points("CORNER", int(round(CORNER_POINTS * self._corner_peak)))
       self._corner_t, self._cornering, self._corner_peak = 0.0, False, 0.0
 
   def _steering(self, dt: float, v: float, x: Extra) -> None:
@@ -415,7 +415,7 @@ class DriveScore:
       if self._limiter_t >= LIMITER_HOLD and self._limiter_armed:
         self._limiter_armed = False
         self.limiter_hits += 1
-        if self.flavour == CHAOS:
+        if self.flavour == SPIRITED:
           self._penalty(LIMITER_POINTS, "LIMITER")
         else:
           self._incident("LIMITER")
@@ -434,11 +434,11 @@ class DriveScore:
         lo, hi = x.rev_limit - PERFECT_BAND[0], x.rev_limit - PERFECT_BAND[1]
         if lo <= peak < hi:
           self.perfect_shifts += 1
-          if self.flavour == CHAOS:
-            self._chaos_points("PERFECT SHIFT", PERFECT_SHIFT_POINTS)
+          if self.flavour == SPIRITED:
+            self._spirited_points("PERFECT SHIFT", PERFECT_SHIFT_POINTS)
     self._prev_gear = x.gear
 
-  def _chaos_points(self, name: str, base: int) -> None:
+  def _spirited_points(self, name: str, base: int) -> None:
     self._combo = min(COMBO_MAX, self._combo + 1) if self._since_event <= COMBO_WINDOW_S else 1
     self._since_event = 0.0
     gained = base * self._combo
@@ -451,7 +451,7 @@ class DriveScore:
       self._streak_t = STREAK_STEP_S  # always announce: a hard event is the thing the streak is about
       self._incident(name)
       return
-    self._chaos_points(name, int(round(points_per * peak)))
+    self._spirited_points(name, int(round(points_per * peak)))
 
   # ---- the rank -------------------------------------------------------------------------------------------
 
@@ -484,7 +484,7 @@ class DriveScore:
       return None
     brakes, launches = self._per10(self.hard_brakes), self._per10(self.hard_launches)
     following, awareness = self.following(), self.awareness()
-    if self.flavour == CHAOS:
+    if self.flavour == SPIRITED:
       aggression = _clip(100.0 * (1.0 - math.exp(-(brakes + launches) / 4.0)))
       cornering = _clip(100.0 * self.peak_lat_g / 0.5) if self.lat_t >= MIN_DATA_T else None
       shifting = None

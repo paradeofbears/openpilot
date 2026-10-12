@@ -20,7 +20,7 @@ from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_history import DriveHistory
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import Powertrain
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
-  CHAOS, FLAVOUR_NAMES, OFF, SUB_NAMES, DriveScore, Extra, driver_in_control, rank_letter,
+  SPIRITED, FLAVOUR_NAMES, OFF, SUB_NAMES, DriveScore, Extra, driver_in_control, rank_letter,
 )
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -257,7 +257,7 @@ class TripCard:
     sc, s = self.score, self.stats
     shared = [(str(sc.tailgates), tr("tailgating")),
               (f"{100 * s.share(sc.driver_distance, s.distance):.0f}%", tr("of the distance you drove"))]
-    if sc.flavour == CHAOS:
+    if sc.flavour == SPIRITED:
       launch = sc.best_0_60 if sc.best_0_60 is not None else sc.best_0_30
       launch_label = tr("best 0-60 mph") if sc.best_0_60 is not None else tr("best 0-30 mph")
       return [

@@ -27,7 +27,7 @@ from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lead_screen import lead_
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mini_map import DM_CLEAR, MiniMap, location
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import SUPPORTED_MAPD_VERSIONS, RoadLoader
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom import points_hud
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import CHAOS, OFF
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import SPIRITED, OFF
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import CanTap
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.shift_lights import (
   AUTO, DEFAULT_LEAD, DEFAULT_REV_LIMIT, LEAD_OPTIONS, REV_LIMIT_OPTIONS, SHIFT_POINT_OPTIONS, ShiftLights,
@@ -100,7 +100,7 @@ class BoomBoomOverlays(Widget):
       v = ui_state.params.get("MapdVersion")
       self._mapd_version = v.decode() if isinstance(v, bytes) else v
     style = ui_state.params.get(RANK_STYLE)
-    self.rank_style = style if isinstance(style, int) and OFF <= style <= CHAOS else OFF
+    self.rank_style = style if isinstance(style, int) and OFF <= style <= SPIRITED else OFF
     if self._enabled.get(SHIFT_LIGHTS) or self.rank_style != OFF:
       self.rev_limit = _option(ui_state.params.get(SHIFT_REV_LIMIT), REV_LIMIT_OPTIONS, DEFAULT_REV_LIMIT)
       self.lead = _option(ui_state.params.get(SHIFT_LEAD), LEAD_OPTIONS, DEFAULT_LEAD)
