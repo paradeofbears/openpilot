@@ -8,7 +8,8 @@ from opendbc.can.packer import CANPacker
 from openpilot.common.test import OpenpilotTestCase
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import STALE_T, CanTap, Powertrain, decode_frame
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.shift_lights import (
-  AUTO, CAP_MARGIN, DEFAULT_REDLINE, FILL_SPAN, LEAD_T, LEDS, REARM_DROP, TOP_GEAR, ShiftLights, ShiftLogic,
+  AUTO, CAP_MARGIN, DEFAULT_LEAD, DEFAULT_REV_LIMIT, FILL_SPAN, LEAD_OPTIONS, LEDS, REARM_DROP, TOP_GEAR, ShiftLights,
+  ShiftLogic,
   flash_point, lit, shift_due,
 )
 from openpilot.sunnypilot.selfdrive.ui import shift_chime
@@ -49,14 +50,14 @@ def _ad(f):
   return f.address, bytes(f.dat)
 
 
-RED = DEFAULT_REDLINE  # 6300, the 2022 CX-5 2.5 Turbo's tach
+RED = DEFAULT_REV_LIMIT  # 5900, where a 2022 CX-5 2.5 Turbo's revs stop in M (its tach turns red at 6300)
 
 
-def climb(logic, start, end, rate, gear=2, manual=True, fixed=AUTO, dt=0.05):
+def climb(logic, start, end, rate, gear=2, manual=True, fixed=AUTO, dt=0.05, lead=DEFAULT_LEAD):
   """Rev from start to end at `rate` rpm/s; returns the rpms where the chime fired."""
   fired, rpm = [], start
   while rpm <= end:
-    if logic.update(rpm, dt, RED, fixed, gear, manual):
+    if logic.update(rpm, dt, RED, fixed, gear, manual, lead):
       fired.append(rpm)
     rpm += rate * dt
   return fired
@@ -66,11 +67,11 @@ class TestShiftPoint(OpenpilotTestCase):
   def test_flash_point_and_cap(self):
     assert flash_point(RED, AUTO) == RED - CAP_MARGIN
     assert flash_point(RED, 4500) == 4500
-    assert flash_point(6000, 6000) == 6000 - CAP_MARGIN  # a fixed point never past the redline margin
+    assert flash_point(5700, 6000) == 5700 - CAP_MARGIN  # a fixed point never past the limit's margin
 
   def test_auto_leads_by_the_rev_rate(self):
-    assert not shift_due(5000, 2000, RED, AUTO)  # 5000 + 1200 short of 6300
-    assert shift_due(5000, 2500, RED, AUTO)      # 5000 + 1500 reaches it within LEAD_T
+    assert not shift_due(4500, 1000, RED, AUTO)  # 4500 + 900 short of 5900 at the 0.9 s Normal lead
+    assert shift_due(4500, 1600, RED, AUTO)      # 4500 + 1440 reaches it
     assert shift_due(RED - CAP_MARGIN, 0, RED, AUTO)
     assert not shift_due(4900, 5000, RED, 5000)  # a fixed point ignores the rate
     assert not shift_due(2000, 8000, RED, AUTO)  # a launch's rate spike far below the bar is no shift
@@ -85,7 +86,7 @@ class TestShiftPoint(OpenpilotTestCase):
 class TestShiftLogic(OpenpilotTestCase):
   def test_fast_climb_flashes_early_slow_climb_at_the_cap(self):
     fast = climb(ShiftLogic(), 3000, 6300, 2500)
-    assert len(fast) == 1 and RED - 2500 * LEAD_T - 300 < fast[0] < RED - 2500 * LEAD_T + 300
+    assert len(fast) == 1 and RED - 2500 * DEFAULT_LEAD - 300 < fast[0] < RED - 2500 * DEFAULT_LEAD + 300
     slow = climb(ShiftLogic(), 3000, 6300, 300)
     assert len(slow) == 1 and abs(slow[0] - (RED - CAP_MARGIN)) <= 300 * 0.05 + 1
 
@@ -116,6 +117,11 @@ class TestShiftLogic(OpenpilotTestCase):
       logic.update(5150, 0.05, RED, AUTO, 2, True)
     assert not logic.flashing
 
+  def test_warning_time_moves_the_flash(self):
+    early, normal, late = (climb(ShiftLogic(), 3000, 6000, 1300, lead=lead)[0] for lead in LEAD_OPTIONS)
+    assert early < normal < late
+    assert RED - normal >= 1300 * DEFAULT_LEAD - 70  # Normal flashes ~0.9 s ahead of the limit at a 1st-gear climb
+
   def test_no_rpm(self):
     logic = ShiftLogic()
     assert not logic.update(None, 0.05, RED, AUTO, 2, True) and not logic.flashing
@@ -133,8 +139,8 @@ class TestShiftLights(OpenpilotTestCase):
 
   def test_unknown_settings_fall_back(self):
     sl = ShiftLights()
-    sl.update(Powertrain(), 1234, 777, 0.05)
-    assert (sl.redline, sl.fixed) == (DEFAULT_REDLINE, AUTO)
+    sl.update(Powertrain(), 1234, 777, 0.05, 3.3)
+    assert (sl.rev_limit, sl.fixed, sl.lead) == (DEFAULT_REV_LIMIT, AUTO, DEFAULT_LEAD)
 
 
 class FakeParams:

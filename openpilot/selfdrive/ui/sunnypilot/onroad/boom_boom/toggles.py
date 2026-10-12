@@ -18,7 +18,8 @@ MINI_MAP = "MiniMap"
 RANK_STYLE = "TripRankStyle"  # 0 off, 1 safety, 2 chaos (scoring.py)
 SHIFT_LIGHTS = "ShiftLights"
 SHIFT_CHIME = "ShiftChime"            # read by soundd too (sunnypilot/selfdrive/ui/shift_chime.py)
-SHIFT_REDLINE = "ShiftRedline"        # index into shift_lights.REDLINE_OPTIONS
+SHIFT_REV_LIMIT = "ShiftRevLimit"     # index into shift_lights.REV_LIMIT_OPTIONS
+SHIFT_LEAD = "ShiftLead"              # index into shift_lights.LEAD_OPTIONS (Early, Normal, Late)
 SHIFT_POINT = "ShiftPoint"            # index into shift_lights.SHIFT_POINT_OPTIONS (0 = Auto)
 SHIFT_CHIME_VOLUME = "ShiftChimeVolume"
 SHIFT_CHIME_REQUEST = "ShiftChimeRequest"
@@ -43,18 +44,28 @@ def extra_items(params) -> list:
       inline=False,
     ),
     multiple_button_item_sp(
-      title=lambda: tr("Shift Lights: Redline"),
-      description=lambda: tr("Where your tachometer's red zone starts. The 2022 CX-5 2.5 Turbo's is 6300 rpm."),
-      buttons=[lambda: "6000", lambda: "6300", lambda: "6500"],
-      selected_index=int(params.get(SHIFT_REDLINE, return_default=True) or 0),
-      param=SHIFT_REDLINE,
+      title=lambda: tr("Shift Lights: Rev Limit"),
+      description=lambda: tr("Where the revs actually stop in manual mode. On the 2022 CX-5 Turbo that is about " +
+                             "5900 rpm, measured from drive logs, even though the tach turns red at 6300."),
+      buttons=[lambda: "5700", lambda: "5900", lambda: "6300"],
+      selected_index=int(params.get(SHIFT_REV_LIMIT, return_default=True) or 0),
+      param=SHIFT_REV_LIMIT,
+      inline=False,
+    ),
+    multiple_button_item_sp(
+      title=lambda: tr("Shift Lights: Warning Time"),
+      description=lambda: tr("How long before the rev limit Auto flashes: time to see it, react and shift. " +
+                             "Early 1.2 s, Normal 0.9 s, Late 0.6 s."),
+      buttons=[lambda: tr("Early"), lambda: tr("Normal"), lambda: tr("Late")],
+      selected_index=int(params.get(SHIFT_LEAD, return_default=True) or 0),
+      param=SHIFT_LEAD,
       inline=False,
     ),
     multiple_button_item_sp(
       title=lambda: tr("Shift Lights: Shift Point"),
-      description=lambda: tr("Auto flashes when the revs, at the rate they are climbing, would reach the redline " +
-                             "in 0.6 s: early in 1st and 2nd, close to the redline in higher gears. Or pick a fixed " +
-                             "rpm. Either way it flashes no later than 300 rpm below the redline."),
+      description=lambda: tr("Auto flashes when the revs, at the rate they are climbing, would reach the rev limit " +
+                             "within the warning time: early in 1st and 2nd, closer to the limit in higher gears. Or " +
+                             "pick a fixed rpm. Either way it flashes no later than 400 rpm below the rev limit."),
       buttons=[lambda: tr("Auto"), lambda: "4500", lambda: "5000", lambda: "5500", lambda: "6000"],
       selected_index=int(params.get(SHIFT_POINT, return_default=True) or 0),
       param=SHIFT_POINT,
