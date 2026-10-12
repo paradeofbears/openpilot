@@ -1,17 +1,23 @@
 """
-Shift lights: a race-car row of dots that fills as the revs climb and flashes at the shift point.
+Shift lights: a race-car row of dots that fills as the revs climb and flashes when it is time to shift.
 
 This file is part of zoompilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 
 Shown only while the lever is in the M gate (mazda_can.Powertrain.manual): in D the gearbox shifts at
-1,600-2,100 rpm in ordinary driving and the lights would never matter. Ten dots, green then amber then
-red, over the SPAN_RPM below the shift point; at the shift point every dot flashes blue. The gear sits
-beside the row as "M3".
+1,600-2,100 rpm in ordinary driving and the lights would never matter. The gear sits beside the row as "M3".
 
-Optional chime: once per climb past the shift point, never in top gear, re-armed only after the revs
-fall HYSTERESIS_RPM below it. The overlay passes the request to soundd (shift_chime.py), which plays an
-existing sound only when no alert sound is playing. Display only.
+When to shift:
+  - Auto (default): lead-time lights, as race cars use. Flash when the revs, at the rate they are climbing,
+    would reach the redline within LEAD_T, so a fast climb in 1st or 2nd flashes early enough to shift before
+    the limiter and a slow climb in 4th flashes close to the redline. Never later than CAP_MARGIN below it.
+  - A fixed rpm the driver picks: flash there (still capped at CAP_MARGIN below the redline).
+The 2022 CX-5 2.5 Turbo's tach redline starts at 6,300 rpm.
+
+The dots fill green, amber, red over FILL_SPAN below the flash point and all flash blue while it is time to
+shift. Optional chime: once at the start of each flash, never in top gear, re-armed when the revs fall
+REARM_DROP below where it sounded (any upshift does that). The overlay passes the request to soundd
+(shift_chime.py), which plays an existing sound only when no alert sound is playing. Display only.
 """
 import numpy as np
 import pyray as rl
@@ -22,11 +28,18 @@ from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 
 LEDS = 10
-SPAN_RPM = 2000.0
-HYSTERESIS_RPM = 300.0
 TOP_GEAR = 6
-SHIFT_RPM_OPTIONS = (4500, 5000, 5500, 6000)
-DEFAULT_SHIFT_RPM = 5500
+REDLINE_OPTIONS = (6000, 6300, 6500)
+DEFAULT_REDLINE = 6300               # the 2022 CX-5 2.5 Turbo's tach
+AUTO = 0
+SHIFT_POINT_OPTIONS = (AUTO, 4500, 5000, 5500, 6000)  # index 0 is Auto
+LEAD_T = 0.6                         # s: reaction plus the gearbox completing the shift
+CAP_MARGIN = 300.0                   # rpm below the redline the flash comes at the latest
+FILL_SPAN = 2000.0                   # rpm the dots fill over, below the flash point
+FLASH_HOLD = 150.0                   # rpm the revs may sag without the flash stopping
+HOLD_T = 0.4                         # s the flash outlasts the shift being due, so it does not flicker
+REARM_DROP = 500.0                   # rpm below the chime's rpm before it can sound again
+RATE_TAU = 0.12                      # s, smoothing of the rev rate
 FLASH_HZ = 8.0
 
 LED_R = 17
@@ -43,65 +56,105 @@ BLUE = rl.Color(60, 140, 255, 255)
 WHITE = rl.Color(255, 255, 255, 235)
 
 
-def lit(rpm: float, shift_rpm: float) -> int:
-  """How many dots are on."""
-  if rpm >= shift_rpm:
+def flash_point(redline: float, fixed: int) -> float:
+  """The latest rpm the lights flash at: the fixed point if one is set, never past the redline's margin."""
+  cap = redline - CAP_MARGIN
+  return min(float(fixed), cap) if fixed != AUTO else cap
+
+
+def shift_due(rpm: float, rate: float, redline: float, fixed: int) -> bool:
+  top = flash_point(redline, fixed)
+  if rpm >= top:
+    return True
+  # predict only once the dots are filling: a launch or a gear change spikes the rate at low revs
+  return fixed == AUTO and rpm >= top - FILL_SPAN and rpm + max(rate, 0.0) * LEAD_T >= redline
+
+
+def lit(rpm: float, top: float) -> int:
+  """How many dots are on, filling over FILL_SPAN below `top`."""
+  if rpm >= top:
     return LEDS
-  return int(np.clip((rpm - (shift_rpm - SPAN_RPM)) / SPAN_RPM * LEDS, 0, LEDS))
+  return int(np.clip((rpm - (top - FILL_SPAN)) / FILL_SPAN * LEDS, 0, LEDS))
 
 
 def led_color(i: int) -> rl.Color:
   return GREEN if i < 4 else AMBER if i < 7 else RED
 
 
-class ChimeTrigger:
-  def __init__(self):
-    self._armed = True
+class ShiftLogic:
+  """Rev rate, the flash and the chime, from a stream of rpm samples."""
 
-  def update(self, rpm: float | None, gear: int | None, manual: bool, shift_rpm: float) -> bool:
-    if rpm is None:
+  def __init__(self):
+    self.rate = FirstOrderFilter(0.0, RATE_TAU, 0.05)
+    self._prev_rpm: float | None = None
+    self.flashing = False
+    self._flash_from = 0.0
+    self._since_due = 0.0
+    self._chimed_at: float | None = None
+
+  def update(self, rpm: float | None, dt: float, redline: float, fixed: int, gear: int | None, manual: bool) -> bool:
+    """Returns True when the chime should sound now."""
+    if rpm is None or dt <= 0:
+      self._prev_rpm = None
+      self.flashing = False
       return False
-    if rpm < shift_rpm - HYSTERESIS_RPM:
-      self._armed = True
-      return False
-    if rpm >= shift_rpm and self._armed and manual and gear is not None and gear < TOP_GEAR:
-      self._armed = False
-      return True
+    if self._prev_rpm is not None:
+      self.rate.dt = dt  # the UI's frame time varies; keep the smoothing in seconds
+      self.rate.update_alpha(RATE_TAU)
+      self.rate.update((rpm - self._prev_rpm) / dt)
+    self._prev_rpm = rpm
+
+    if self._chimed_at is not None and rpm < self._chimed_at - REARM_DROP:
+      self._chimed_at = None
+    if shift_due(rpm, self.rate.x, redline, fixed):
+      self._since_due = 0.0
+      if not self.flashing:
+        self.flashing = True
+        self._flash_from = rpm
+        if manual and gear is not None and gear < TOP_GEAR and self._chimed_at is None:
+          self._chimed_at = rpm
+          return True
+    elif self.flashing:
+      # ride out a wobble in the prediction; stop once it has not been due for a moment or the revs fell
+      self._since_due += dt
+      self.flashing = self._since_due < HOLD_T and rpm >= self._flash_from - FLASH_HOLD
     return False
 
 
 class ShiftLights:
   def __init__(self):
     self._alpha = FirstOrderFilter(0.0, 0.15, 1 / gui_app.target_fps)
-    self._trigger = ChimeTrigger()
+    self.logic = ShiftLogic()
     self.pt = Powertrain()
-    self.shift_rpm = DEFAULT_SHIFT_RPM
+    self.redline = DEFAULT_REDLINE
+    self.fixed = AUTO
     self._t = 0.0
 
   def reset(self) -> None:
     self._alpha.x = 0.0
-    self._trigger = ChimeTrigger()
+    self.logic = ShiftLogic()
     self.pt = Powertrain()
 
   @property
   def showing(self) -> bool:
     return bool(self.pt.manual) and self.pt.rpm is not None
 
-  def update(self, pt: Powertrain, shift_rpm: int, dt: float) -> bool:
+  def update(self, pt: Powertrain, redline: int, fixed: int, dt: float) -> bool:
     """Returns True when the chime should sound this frame."""
     self.pt = pt
-    self.shift_rpm = shift_rpm if shift_rpm in SHIFT_RPM_OPTIONS else DEFAULT_SHIFT_RPM
+    self.redline = redline if redline in REDLINE_OPTIONS else DEFAULT_REDLINE
+    self.fixed = fixed if fixed in SHIFT_POINT_OPTIONS else AUTO
     self._t += dt
     self._alpha.update(1.0 if self.showing else 0.0)
-    return self._trigger.update(pt.rpm, pt.gear, bool(pt.manual), self.shift_rpm)
+    return self.logic.update(pt.rpm, dt, self.redline, self.fixed, pt.gear, bool(pt.manual))
 
   def render(self, rect: rl.Rectangle, low: bool = False) -> None:
     a = self._alpha.x
     if a < 0.02:
       return
     rpm = self.pt.rpm or 0.0
-    n = lit(rpm, self.shift_rpm)
-    flashing = rpm >= self.shift_rpm and int(self._t * FLASH_HZ * 2) % 2 == 0
+    n = lit(rpm, flash_point(self.redline, self.fixed))
+    blink_on = int(self._t * FLASH_HZ * 2) % 2 == 0
 
     font = gui_app.font(FontWeight.BOLD)
     badge = f"M{self.pt.gear}" if self.pt.gear else "M"
@@ -117,12 +170,11 @@ class ShiftLights:
 
     lx = x0 + 20 + bsize.x + 24 + LED_R
     for i in range(LEDS):
-      centre = rl.Vector2(lx + i * LED_GAP, cy)
-      if rpm >= self.shift_rpm:
-        color = BLUE if flashing else OFF
+      if self.logic.flashing:
+        color = BLUE if blink_on else OFF
       else:
         color = led_color(i) if i < n else OFF
-      rl.draw_circle_v(centre, LED_R, _fade(color, a))
+      rl.draw_circle_v(rl.Vector2(lx + i * LED_GAP, cy), LED_R, _fade(color, a))
 
 
 def _fade(c: rl.Color, a: float) -> rl.Color:

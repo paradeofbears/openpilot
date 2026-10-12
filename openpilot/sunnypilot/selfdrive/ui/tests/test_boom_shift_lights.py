@@ -8,7 +8,8 @@ from opendbc.can.packer import CANPacker
 from openpilot.common.test import OpenpilotTestCase
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import STALE_T, CanTap, Powertrain, decode_frame
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.shift_lights import (
-  DEFAULT_SHIFT_RPM, HYSTERESIS_RPM, LEDS, SPAN_RPM, TOP_GEAR, ChimeTrigger, ShiftLights, lit,
+  AUTO, CAP_MARGIN, DEFAULT_REDLINE, FILL_SPAN, LEAD_T, LEDS, REARM_DROP, TOP_GEAR, ShiftLights, ShiftLogic,
+  flash_point, lit, shift_due,
 )
 from openpilot.sunnypilot.selfdrive.ui import shift_chime
 
@@ -48,44 +49,92 @@ def _ad(f):
   return f.address, bytes(f.dat)
 
 
-class TestLights(OpenpilotTestCase):
-  def test_fill(self):
-    s = DEFAULT_SHIFT_RPM
-    assert lit(s - SPAN_RPM - 100, s) == 0
-    assert lit(s - SPAN_RPM / 2, s) == LEDS // 2
-    assert lit(s - 1, s) == LEDS - 1
-    assert lit(s, s) == LEDS
+RED = DEFAULT_REDLINE  # 6300, the 2022 CX-5 2.5 Turbo's tach
 
+
+def climb(logic, start, end, rate, gear=2, manual=True, fixed=AUTO, dt=0.05):
+  """Rev from start to end at `rate` rpm/s; returns the rpms where the chime fired."""
+  fired, rpm = [], start
+  while rpm <= end:
+    if logic.update(rpm, dt, RED, fixed, gear, manual):
+      fired.append(rpm)
+    rpm += rate * dt
+  return fired
+
+
+class TestShiftPoint(OpenpilotTestCase):
+  def test_flash_point_and_cap(self):
+    assert flash_point(RED, AUTO) == RED - CAP_MARGIN
+    assert flash_point(RED, 4500) == 4500
+    assert flash_point(6000, 6000) == 6000 - CAP_MARGIN  # a fixed point never past the redline margin
+
+  def test_auto_leads_by_the_rev_rate(self):
+    assert not shift_due(5000, 2000, RED, AUTO)  # 5000 + 1200 short of 6300
+    assert shift_due(5000, 2500, RED, AUTO)      # 5000 + 1500 reaches it within LEAD_T
+    assert shift_due(RED - CAP_MARGIN, 0, RED, AUTO)
+    assert not shift_due(4900, 5000, RED, 5000)  # a fixed point ignores the rate
+    assert not shift_due(2000, 8000, RED, AUTO)  # a launch's rate spike far below the bar is no shift
+
+  def test_fill(self):
+    top = flash_point(RED, AUTO)
+    assert lit(top - FILL_SPAN - 100, top) == 0
+    assert lit(top - FILL_SPAN / 2, top) == LEDS // 2
+    assert lit(top, top) == LEDS
+
+
+class TestShiftLogic(OpenpilotTestCase):
+  def test_fast_climb_flashes_early_slow_climb_at_the_cap(self):
+    fast = climb(ShiftLogic(), 3000, 6300, 2500)
+    assert len(fast) == 1 and RED - 2500 * LEAD_T - 300 < fast[0] < RED - 2500 * LEAD_T + 300
+    slow = climb(ShiftLogic(), 3000, 6300, 300)
+    assert len(slow) == 1 and abs(slow[0] - (RED - CAP_MARGIN)) <= 300 * 0.05 + 1
+
+  def test_fixed_point(self):
+    fired = climb(ShiftLogic(), 3000, 6000, 2500, fixed=4500)
+    assert len(fired) == 1 and 4500 <= fired[0] < 4500 + 2500 * 0.05 + 1
+
+  def test_once_per_climb_rearmed_by_a_shift(self):
+    logic = ShiftLogic()
+    assert len(climb(logic, 3000, 6100, 2000)) == 1
+    assert logic.flashing
+    assert not climb(logic, 6100, 6200, 200)       # holding the revs: no second chime
+    assert not logic.update(6100 - REARM_DROP + 100, 0.05, RED, AUTO, 2, True)  # small dip: not re-armed
+    logic.update(4200, 0.05, RED, AUTO, 3, True)    # the upshift drops the revs
+    assert not logic.flashing
+    assert len(climb(logic, 4200, 6100, 1500, gear=3)) == 1
+
+  def test_flashes_but_never_chimes_in_top_gear_or_drive(self):
+    logic = ShiftLogic()
+    assert not climb(logic, 3000, 6200, 2000, gear=TOP_GEAR) and logic.flashing
+    assert not climb(ShiftLogic(), 3000, 6200, 2000, manual=False)
+
+  def test_lifting_off_stops_the_flash(self):
+    logic = ShiftLogic()
+    climb(logic, 3000, 5200, 3000)  # flashing early on a fast climb
+    assert logic.flashing
+    for _ in range(20):             # lift off: the revs hold, then sag a little, and the rate falls to zero
+      logic.update(5150, 0.05, RED, AUTO, 2, True)
+    assert not logic.flashing
+
+  def test_no_rpm(self):
+    logic = ShiftLogic()
+    assert not logic.update(None, 0.05, RED, AUTO, 2, True) and not logic.flashing
+
+
+class TestShiftLights(OpenpilotTestCase):
   def test_shows_only_in_manual(self):
     sl = ShiftLights()
-    sl.update(Powertrain(4000.0, 3, False), 5500, 0.05)
+    sl.update(Powertrain(4000.0, 3, False), RED, AUTO, 0.05)
     assert not sl.showing
-    sl.update(Powertrain(4000.0, 3, True), 5500, 0.05)
+    sl.update(Powertrain(4000.0, 3, True), RED, AUTO, 0.05)
     assert sl.showing
-    sl.update(Powertrain(None, 3, True), 5500, 0.05)
+    sl.update(Powertrain(None, 3, True), RED, AUTO, 0.05)
     assert not sl.showing  # no fresh rpm
 
-  def test_unknown_shift_point_falls_back(self):
+  def test_unknown_settings_fall_back(self):
     sl = ShiftLights()
-    sl.update(Powertrain(), 1234, 0.05)
-    assert sl.shift_rpm == DEFAULT_SHIFT_RPM
-
-
-class TestChimeTrigger(OpenpilotTestCase):
-  def test_once_per_climb(self):
-    t = ChimeTrigger()
-    assert not t.update(5000, 2, True, 5500)
-    assert t.update(5600, 2, True, 5500)
-    assert not t.update(5700, 2, True, 5500)                       # holding the revs: once only
-    assert not t.update(5500 - HYSTERESIS_RPM + 50, 2, True, 5500)  # a small dip does not re-arm
-    assert not t.update(5600, 2, True, 5500)
-    t.update(4000, 3, True, 5500)                                   # shifted: revs fell, re-armed
-    assert t.update(5600, 3, True, 5500)
-
-  def test_not_in_top_gear_or_drive(self):
-    assert not ChimeTrigger().update(5600, TOP_GEAR, True, 5500)
-    assert not ChimeTrigger().update(5600, 3, False, 5500)
-    assert not ChimeTrigger().update(None, 3, True, 5500)
+    sl.update(Powertrain(), 1234, 777, 0.05)
+    assert (sl.redline, sl.fixed) == (DEFAULT_REDLINE, AUTO)
 
 
 class FakeParams:

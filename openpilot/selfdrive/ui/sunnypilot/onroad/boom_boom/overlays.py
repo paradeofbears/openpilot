@@ -29,12 +29,14 @@ from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import SUPPORT
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom import points_hud
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import CHAOS, OFF
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import CanTap
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.shift_lights import DEFAULT_SHIFT_RPM, SHIFT_RPM_OPTIONS, ShiftLights
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.shift_lights import (
+  AUTO, DEFAULT_REDLINE, REDLINE_OPTIONS, SHIFT_POINT_OPTIONS, ShiftLights,
+)
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import (
-  G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, RANK_STYLE, SHIFT_CHIME, SHIFT_CHIME_REQUEST, SHIFT_LIGHTS, SHIFT_RPM,
-  SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
+  G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, RANK_STYLE, SHIFT_CHIME, SHIFT_CHIME_REQUEST, SHIFT_LIGHTS, SHIFT_POINT,
+  SHIFT_REDLINE, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
 )
 from openpilot.selfdrive.ui.sunnypilot.onroad.chevron_metrics import ChevronOptions
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.traffic import TrafficBox, box_rect
@@ -52,6 +54,11 @@ MAPD_ROOT = "/data/media/0/osm"  # Paths.mapd_root() on the device
 MARGIN_BOTTOM = 50  # px from the bottom edge for widgets with nothing under them
 
 
+def _option(index, options: tuple, default):
+  """A selector param (an index) as its option value, or the default for anything unexpected."""
+  return options[index] if isinstance(index, int) and 0 <= index < len(options) else default
+
+
 class BoomBoomOverlays(Widget):
   def __init__(self):
     super().__init__()
@@ -60,7 +67,8 @@ class BoomBoomOverlays(Widget):
     self.failed: set[str] = set()  # switched off for this drive after an exception
     self._mapd_version: str | None = None
     self.rank_style = OFF
-    self.shift_rpm = DEFAULT_SHIFT_RPM
+    self.redline = DEFAULT_REDLINE
+    self.shift_point = AUTO
     self._reload_params()
     self._last_t = time.monotonic()
     self._started = False
@@ -93,8 +101,8 @@ class BoomBoomOverlays(Widget):
     style = ui_state.params.get(RANK_STYLE)
     self.rank_style = style if isinstance(style, int) and OFF <= style <= CHAOS else OFF
     if self._enabled.get(SHIFT_LIGHTS):
-      i = ui_state.params.get(SHIFT_RPM)
-      self.shift_rpm = SHIFT_RPM_OPTIONS[i] if isinstance(i, int) and 0 <= i < len(SHIFT_RPM_OPTIONS) else DEFAULT_SHIFT_RPM
+      self.redline = _option(ui_state.params.get(SHIFT_REDLINE), REDLINE_OPTIONS, DEFAULT_REDLINE)
+      self.shift_point = _option(ui_state.params.get(SHIFT_POINT), SHIFT_POINT_OPTIONS, AUTO)
 
   @property
   def ranking(self) -> bool:
@@ -203,7 +211,7 @@ class BoomBoomOverlays(Widget):
       self._can_tap.close()
 
   def _update_shift_lights(self, dt: float) -> None:
-    if self.shift_lights.update(self._can_tap.update(), self.shift_rpm, dt) and self.on(SHIFT_CHIME):
+    if self.shift_lights.update(self._can_tap.update(), self.redline, self.shift_point, dt) and self.on(SHIFT_CHIME):
       ui_state.params.put(SHIFT_CHIME_REQUEST, "1")  # soundd plays it if nothing else is sounding
 
   def _update_mini_map(self, sm, llk) -> None:
