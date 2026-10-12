@@ -13,9 +13,11 @@ SAFETY sub-scores: Smoothness (hard brakes and launches, jerk, hard corners, ste
 Following (tailgating, average time gap, closest time to collision), Awareness (distraction, signalling into
 an occupied blind spot, speed over a known limit), Engine (economical revs and throttle, no limiter hits).
 SPIRITED sub-scores: Control (clean launches and controlled stops, no panic braking or harsh jerks), Cornering
-(peak lateral G), Shifting (perfect shifts in manual mode, limiter hits cost), and Discipline (Following and
-Awareness, the same penalties as Safety). Spirited rewards doing it well, not doing it hard: a launch scores the
-same however hard it is, as long as it is clean, and braking hard never scores.
+(the share of bends taken on one steady load: no mid-corner correction, hard brake or jerk), Shifting (perfect
+shifts in manual mode, limiter hits cost), and Discipline (Following and Awareness, the same penalties as
+Safety). Spirited rewards doing it well, not doing it hard: a launch scores the same however hard it is, as long
+as it is clean, a clean bend scores the same at any load past BEND_G, and braking hard never scores. Peak
+lateral G is kept as a figure to look at, never scored.
 
 A sub-score with no data is left out (None) rather than counted as zero, and the rank is the weighted mean of
 the rest, capped at WEAK_LINK above the weakest: one terrible category cannot be averaged away. Speed is never
@@ -50,7 +52,11 @@ HARSH_JERK_EXIT = 3.0
 HARD_CORNER_G = 0.3        # lateral G held HARD_CORNER_HOLD counts as a hard corner (reference p99 0.27 g)
 HARD_CORNER_EXIT_G = 0.2
 HARD_CORNER_HOLD = 0.5
-BIG_CORNER_G = 0.35        # spirited: a corner past this scores
+BEND_G = 0.2               # spirited: lateral G held BEND_HOLD makes a bend worth judging (a brisk on-ramp)
+BEND_EXIT_G = 0.12
+BEND_HOLD = 1.0
+BEND_WOBBLE_G = 0.04       # a mid-corner unload and reload bigger than this and BEND_WOBBLE_SHARE of the peak is
+BEND_WOBBLE_SHARE = 0.15   # a correction (clean bends on routes 10-15 wobbled 0.02 g at most, corrections 0.07+)
 STEER_FAST = 90.0          # deg/s at speed counts as a jerky steering input
 STEER_FAST_SPEED = 15.0    # m/s; below this, fast steering is turning at junctions and parking
 STOP_WINDOW_T = 3.0        # s before standstill a stop is judged over
@@ -93,7 +99,7 @@ LIMITER_POINTS = -50 * POINTS_SCALE   # spirited; in safety a limiter hit breaks
 SMOOTH_STOP_POINTS = 20 * POINTS_SCALE  # safety
 CLEAN_LAUNCH_POINTS = 250 * POINTS_SCALE  # spirited, the same however hard the launch
 CONTROLLED_STOP_POINTS = 100 * POINTS_SCALE  # spirited
-CORNER_POINTS = 400 * POINTS_SCALE  # spirited, per g of peak lateral acceleration
+CLEAN_BEND_POINTS = 200 * POINTS_SCALE  # spirited, the same at any load
 PERFECT_SHIFT_POINTS = 150 * POINTS_SCALE  # spirited
 COMBO_WINDOW_S = 10.0      # spirited: events this close together chain
 COMBO_MAX = 3
@@ -203,6 +209,15 @@ class DriveScore:
   _corner_t: float = 0.0
   _cornering: bool = False
   _corner_peak: float = 0.0
+  # spirited bends
+  bends: int = 0
+  clean_bends: int = 0
+  _bend_on: bool = False
+  _bend_t: float = 0.0
+  _bend_peak: float = 0.0
+  _bend_dip: float = 0.0
+  _bend_wobbled: bool = False
+  _bend_marks: tuple = (0, 0)  # (hard brakes, harsh jerks) at turn-in
   _stop_window: list = field(default_factory=list)  # (age, a, |jerk|) over the last STOP_WINDOW_T
   _distracted_run: float = 0.0
   _distraction_counted: bool = False
@@ -328,9 +343,40 @@ class DriveScore:
         if self.flavour == SAFETY:
           self._incident("CORNER")
     elif g < HARD_CORNER_EXIT_G:
-      if self._cornering and self.flavour == SPIRITED and self._corner_peak >= BIG_CORNER_G:
-        self._spirited_points("CORNER", int(round(CORNER_POINTS * self._corner_peak)))
       self._corner_t, self._cornering, self._corner_peak = 0.0, False, 0.0
+    self._bend(dt, g)
+
+  def _bend(self, dt: float, g: float) -> None:
+    """Spirited: a bend is clean when the load builds once and unwinds once, with no correction, hard brake or
+    harsh jerk in between."""
+    if not self._bend_on:
+      if g > BEND_G:
+        self._bend_on, self._bend_t, self._bend_wobbled = True, 0.0, False
+        self._bend_peak = self._bend_dip = g
+        self._bend_marks = (self.hard_brakes, self.harsh_jerks)
+      return
+    if g > BEND_G:
+      self._bend_t += dt
+    self._bend_dip = min(self._bend_dip, g)
+    wobble = max(BEND_WOBBLE_G, BEND_WOBBLE_SHARE * self._bend_peak)
+    if self._bend_peak - self._bend_dip > wobble and g - self._bend_dip > wobble:
+      self._bend_wobbled = True  # unloaded and reloaded mid-corner
+      self._bend_peak = self._bend_dip = g
+    elif g >= self._bend_peak:
+      self._bend_peak = self._bend_dip = g
+    if g < BEND_EXIT_G:
+      self._bend_on = False
+      if self._bend_t < BEND_HOLD:
+        return  # a kink or a lane change, not a bend
+      self.bends += 1
+      clean = not self._bend_wobbled and (self.hard_brakes, self.harsh_jerks) == self._bend_marks
+      if clean:
+        self.clean_bends += 1
+      if self.flavour == SPIRITED:
+        if clean:
+          self._spirited_points("CLEAN CORNER", CLEAN_BEND_POINTS)
+        else:
+          self._combo_lost()
 
   def _steering(self, dt: float, v: float, x: Extra) -> None:
     if x.steer_rate is None or v < STEER_FAST_SPEED:
@@ -535,7 +581,7 @@ class DriveScore:
       if self.launches_judged + self.stops:
         clean = (self.clean_launches + self.controlled_stops) / (self.launches_judged + self.stops)
         control = _clip(100.0 * clean - 1.0 * self._per10(self.harsh_jerks) - 10.0 * self._per10(self.panic_brakes))
-      cornering = _clip(100.0 * self.peak_lat_g / 0.5) if self.lat_t >= MIN_DATA_T else None
+      cornering = 100.0 * self.clean_bends / self.bends if self.bends else None
       shifting = None
       if self.manual_t >= MIN_DATA_T or self.perfect_shifts:
         shifting = _clip(100.0 * (1.0 - math.exp(-self.perfect_shifts / 3.0)) - 5.0 * self.limiter_hits)

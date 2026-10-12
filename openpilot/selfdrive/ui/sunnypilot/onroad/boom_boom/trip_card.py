@@ -261,7 +261,8 @@ class TripCard:
       launch = sc.best_0_60 if sc.best_0_60 is not None else sc.best_0_30
       launch_label = tr("best 0-60 mph") if sc.best_0_60 is not None else tr("best 0-30 mph")
       return [
-        (f"{sc.peak_lat_g:.2f} g" if sc.lat_t > 0 else "-", tr("peak cornering")),
+        (f"{sc.clean_bends}/{sc.bends}" if sc.bends else "-",
+         tr("clean corners") + (f", {tr('peak')} {sc.peak_lat_g:.2f} g" if sc.lat_t > 0 else "")),
         (f"{launch:.1f} s" if launch is not None else "-", launch_label),
         (f"{sc.perfect_shifts}/{sc.upshifts}" if sc.manual_t > 0 else "-", tr("perfect shifts")),
         (f"{sc.clean_launches}/{sc.launches_judged}" if sc.launches_judged else "-", tr("clean launches")),

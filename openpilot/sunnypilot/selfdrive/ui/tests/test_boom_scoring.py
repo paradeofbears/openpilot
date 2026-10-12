@@ -6,7 +6,7 @@ from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
   BLIND_SPOT_POINTS, CLEAN_LAUNCH_POINTS, CLEAN_POINTS, CONTROLLED_STOP_POINTS, DISTRACTED_POINTS, LIMITER_POINTS, MIN_RANK_DISTANCE, MPH,
-  PERFECT_SHIFT_POINTS, SAFETY, SMOOTH_STOP_POINTS, SPIRITED, STREAK_MAX, TAILGATE_HOLD, TAILGATE_POINTS, WEAK_LINK,
+  PERFECT_SHIFT_POINTS, SAFETY, CLEAN_BEND_POINTS, SMOOTH_STOP_POINTS, SPIRITED, STREAK_MAX, TAILGATE_HOLD, TAILGATE_POINTS, WEAK_LINK,
   DriveScore, Extra, driver_in_control, rank_letter,
 )
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import TripCard
@@ -184,7 +184,28 @@ class TestRicherMetrics(OpenpilotTestCase):
     drive(s, 1.0, x=Extra(lat_g=0.4))
     drive(s, 1.0, x=Extra(lat_g=0.1))
     assert s.hard_corners == 1 and abs(s.peak_lat_g - 0.4) < 1e-6
-    assert s.points == 16_000 and any("CORNER" in p.text for p in s.popups)
+    assert s.bends == 0  # too short to judge as a bend
+
+  def test_spirited_bends_score_steadiness_not_load(self):
+    s = DriveScore(flavour=SPIRITED)
+    for g in (0.25, 0.45):  # a steady bend scores the same at any load
+      drive(s, 2.0, x=Extra(lat_g=g))
+      drive(s, 0.5, x=Extra(lat_g=0.0))
+      assert "CLEAN CORNER" in s.popups[-1].text
+    assert (s.clean_bends, s.bends) == (2, 2) and s.points == CLEAN_BEND_POINTS * 3  # the second at x2
+
+    for g in (0.3, 0.3, 0.2, 0.2, 0.3, 0.3):  # unload and reload mid-corner: a correction
+      drive(s, 0.4, x=Extra(lat_g=g))
+    drive(s, 0.5, x=Extra(lat_g=0.0))
+    assert (s.clean_bends, s.bends) == (2, 3) and s.points == CLEAN_BEND_POINTS * 3
+    assert any(p.text == "COMBO LOST" for p in s.popups)
+
+    drive(s, 1.0, x=Extra(lat_g=0.3))
+    drive(s, 0.5, a=-4.0, x=Extra(lat_g=0.3))  # braking hard mid-corner
+    drive(s, 1.0, x=Extra(lat_g=0.3))
+    drive(s, 0.5, x=Extra(lat_g=0.0))
+    assert (s.clean_bends, s.bends) == (2, 4)
+    assert s.points == CLEAN_BEND_POINTS * 3  # neither the hard brake nor the sloppy bends scored
 
   def test_following_gap_and_ttc(self):
     s = DriveScore(flavour=SAFETY)
@@ -266,11 +287,11 @@ class TestCardHighlights(OpenpilotTestCase):
     card = TripCard()
     card.score = DriveScore(flavour=SPIRITED)
     values = {label: value for value, label in card.highlights()}
-    assert len(values) == 6 and values["peak cornering"] == "-" and values["perfect shifts"] == "-"
+    assert len(values) == 6 and values["clean corners"] == "-" and values["perfect shifts"] == "-"
     card.score = DriveScore(flavour=SPIRITED, lat_t=10.0, peak_lat_g=0.41, manual_t=5.0, upshifts=4, perfect_shifts=3,
-                            best_0_30=5.3, best_0_60=12.4)
+                            best_0_30=5.3, best_0_60=12.4, bends=5, clean_bends=4)
     values = {label: value for value, label in card.highlights()}
-    assert values["peak cornering"] == "0.41 g" and values["perfect shifts"] == "3/4" and values["best 0-60 mph"] == "12.4 s"
+    assert values["clean corners, peak 0.41 g"] == "4/5" and values["perfect shifts"] == "3/4" and values["best 0-60 mph"] == "12.4 s"
     card.score = DriveScore(flavour=SAFETY, stops=4, smooth_stops=3, dm_t=100.0, distracted_t=2.0)
     values = {label: value for value, label in card.highlights()}
     assert values["smooth stops"] == "3/4" and values["eyes on the road"] == "98%" and values["average gap"] == "-"
