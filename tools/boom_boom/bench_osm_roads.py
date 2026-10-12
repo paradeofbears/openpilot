@@ -19,7 +19,7 @@ import time
 import numpy as np
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import RoadIndex, Tile
+from openpilot.selfdrive.ui.boom_boom.osm_roads import RoadIndex, Tile
 
 DEFAULT_DIR = "/data/media/0/osm/offline"
 
@@ -64,7 +64,7 @@ def main() -> None:
   index = RoadIndex(os.path.dirname(os.path.dirname(os.path.dirname(path))))
   index._tiles[path] = tile  # reuse the tile opened above, wherever it lives
   if args.tile:
-    import openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads as osm
+    import openpilot.selfdrive.ui.boom_boom.osm_roads as osm
     osm.tile_path = lambda base, lat, lon: path  # a lone file: every lookup is this tile
   for run in ("first", "repeat"):
     rs = index.query(args.lat, args.lon, args.radius)

@@ -8,8 +8,8 @@ import pyray as rl
 
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom import overlays as overlays_mod
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC
+from openpilot.selfdrive.ui.boom_boom import overlays as overlays_mod
+from openpilot.selfdrive.ui.boom_boom.toggles import G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC
 
 
 def svc(name, fields=None):

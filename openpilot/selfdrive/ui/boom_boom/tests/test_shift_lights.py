@@ -6,13 +6,13 @@ from types import SimpleNamespace
 
 from opendbc.can.packer import CANPacker
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import STALE_T, CanTap, Powertrain, decode_frame
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.shift_lights import (
+from openpilot.selfdrive.ui.boom_boom.mazda_can import STALE_T, CanTap, Powertrain, decode_frame
+from openpilot.selfdrive.ui.boom_boom.shift_lights import (
   AUTO, CAP_MARGIN, DEFAULT_LEAD, DEFAULT_REV_LIMIT, FILL_SPAN, LEAD_OPTIONS, LEDS, REARM_DROP, TOP_GEAR, ShiftLights,
   ShiftLogic,
   flash_point, lit, shift_due,
 )
-from openpilot.sunnypilot.selfdrive.ui import shift_chime
+from openpilot.selfdrive.ui.boom_boom import shift_chime
 
 PACKER = CANPacker("mazda_2017")
 

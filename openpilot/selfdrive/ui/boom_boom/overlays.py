@@ -21,26 +21,26 @@ import pyray as rl
 from opendbc.sunnypilot.car.interfaces import get_steer_rail_schedule
 from openpilot.cereal import messaging
 from openpilot.common.swaglog import cloudlog
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.g_meter import FOOTPRINT_H as G_METER_H, GMeter
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lane_awareness import LaneAwareness
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lead_screen import lead_chevron
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mini_map import DM_CLEAR, MiniMap, location
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import SUPPORTED_MAPD_VERSIONS, RoadLoader
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom import points_hud
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import SPIRITED, OFF
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import CanTap
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.shift_lights import (
+from .g_meter import FOOTPRINT_H as G_METER_H, GMeter
+from .lane_awareness import LaneAwareness
+from .lead_screen import lead_chevron
+from .mini_map import DM_CLEAR, MiniMap, location
+from .osm_roads import SUPPORTED_MAPD_VERSIONS, RoadLoader
+from . import points_hud
+from .scoring import SPIRITED, OFF
+from .mazda_can import CanTap
+from .shift_lights import (
   AUTO, DEFAULT_LEAD, DEFAULT_REV_LIMIT, LEAD_OPTIONS, REV_LIMIT_OPTIONS, SHIFT_POINT_OPTIONS, ShiftLights,
 )
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import (
+from .slow_reason import SlowReasonPill
+from .steer_limit_arc import SteerLimitArc
+from .toggles import (
   G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, RANK_STYLE, SHIFT_CHIME, SHIFT_CHIME_REQUEST, SHIFT_LIGHTS, SHIFT_POINT,
   SHIFT_LEAD, SHIFT_REV_LIMIT, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
 )
 from openpilot.selfdrive.ui.sunnypilot.onroad.chevron_metrics import ChevronOptions
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.traffic import TrafficBox, box_rect
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import TripCard
+from .traffic import TrafficBox, box_rect
+from .trip_card import TripCard
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiState, get_bottom_dev_ui_offset
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.widgets import Widget

@@ -3,10 +3,10 @@ This file is part of zoompilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_history import (
+from openpilot.selfdrive.ui.boom_boom.drive_history import (
   HISTORY, MAX_DRIVES, DriveHistory, line, record, summary,
 )
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import SPIRITED, SAFETY, DriveScore
+from openpilot.selfdrive.ui.boom_boom.scoring import SPIRITED, SAFETY, DriveScore
 
 
 def d(i, rank="A", points=1000, flavour=SAFETY, best_0_30=None):

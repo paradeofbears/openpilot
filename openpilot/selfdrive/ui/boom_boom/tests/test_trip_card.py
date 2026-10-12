@@ -4,7 +4,7 @@ See the LICENSE.md file in the root directory for more details.
 """
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import (
+from openpilot.selfdrive.ui.boom_boom.trip_card import (
   CLIMB_STEP, MIN_SHOW_DISTANCE, TripCard, TripStats, fmt_duration,
 )
 

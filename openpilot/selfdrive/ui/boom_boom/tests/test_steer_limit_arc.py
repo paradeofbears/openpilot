@@ -4,7 +4,7 @@ See the LICENSE.md file in the root directory for more details.
 """
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import (
+from openpilot.selfdrive.ui.boom_boom.steer_limit_arc import (
   AMBER, OVERFLOW_MAX, RED, WHITE, SteerLimitArc, arc_levels, fill_color,
 )
 

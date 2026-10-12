@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom import lead_screen
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lane_awareness import (
+from openpilot.selfdrive.ui.boom_boom import lead_screen
+from openpilot.selfdrive.ui.boom_boom.lane_awareness import (
   MIN_SPEED, T_FOLLOW, LaneAwareness, gap_state, side_level,
 )
 

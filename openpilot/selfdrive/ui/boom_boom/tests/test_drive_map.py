@@ -6,10 +6,10 @@ import numpy as np
 import pyray as rl
 
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_map import (
+from openpilot.selfdrive.ui.boom_boom.drive_map import (
   MAX_POINTS, MIN_SPAN_M, STEP_M, DriveTrace, fit, meters,
 )
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import SPIRITED, DriveScore, Extra
+from openpilot.selfdrive.ui.boom_boom.scoring import SPIRITED, DriveScore, Extra
 
 DT = 0.05
 LAT0, LON0 = 32.78, -96.80

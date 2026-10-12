@@ -6,7 +6,7 @@ import pyray as rl
 
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.traffic import (
+from openpilot.selfdrive.ui.boom_boom.traffic import (
   AMBER, BOX_H, CAR, MIN_BOX_H, RED, TRACK, Car, Mapper, TrafficBox, box_rect, car_color, gather_cars,
 )
 

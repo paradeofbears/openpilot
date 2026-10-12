@@ -4,12 +4,12 @@ See the LICENSE.md file in the root directory for more details.
 """
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
+from openpilot.selfdrive.ui.boom_boom.scoring import (
   BLIND_SPOT_POINTS, CLEAN_LAUNCH_POINTS, CLEAN_POINTS, CONTROLLED_STOP_POINTS, DISTRACTED_POINTS, LIMITER_POINTS, MIN_RANK_DISTANCE, MPH,
   PERFECT_SHIFT_POINTS, SAFETY, CLEAN_BEND_POINTS, SPIRITED_MIN_MOMENTS, SMOOTH_STOP_POINTS, SPIRITED, STREAK_MAX, TAILGATE_HOLD, TAILGATE_POINTS, WEAK_LINK,
   DriveScore, Extra, driver_in_control, rank_letter,
 )
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import TripCard
+from openpilot.selfdrive.ui.boom_boom.trip_card import TripCard
 
 DT = 0.05
 

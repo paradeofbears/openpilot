@@ -9,7 +9,7 @@ selected; the safety flavour also shows the clean-streak multiplier. Display onl
 """
 import pyray as rl
 
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import POPUP_T, SAFETY, DriveScore
+from .scoring import POPUP_T, SAFETY, DriveScore
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached

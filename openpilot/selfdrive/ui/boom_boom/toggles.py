@@ -17,7 +17,7 @@ LANE_AWARENESS = "LaneAwareness"
 MINI_MAP = "MiniMap"
 RANK_STYLE = "TripRankStyle"  # 0 off, 1 safety, 2 spirited (scoring.py)
 SHIFT_LIGHTS = "ShiftLights"
-SHIFT_CHIME = "ShiftChime"            # read by soundd too (sunnypilot/selfdrive/ui/shift_chime.py)
+SHIFT_CHIME = "ShiftChime"            # read by soundd too (shift_chime.py)
 SHIFT_REV_LIMIT = "ShiftRevLimit"     # index into shift_lights.REV_LIMIT_OPTIONS
 SHIFT_LEAD = "ShiftLead"              # index into shift_lights.LEAD_OPTIONS (Early, Normal, Late)
 SHIFT_POINT = "ShiftPoint"            # index into shift_lights.SHIFT_POINT_OPTIONS (0 = Auto)

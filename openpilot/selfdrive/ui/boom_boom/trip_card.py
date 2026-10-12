@@ -17,10 +17,10 @@ from opendbc.car.structs import car
 from openpilot.common.constants import CV
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.system.ui.lib.application import FontWeight, gui_app
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_history import DriveHistory
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_map import DriveMap, DriveTrace, render_legend
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import Powertrain
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
+from .drive_history import DriveHistory
+from .drive_map import DriveMap, DriveTrace, render_legend
+from .mazda_can import Powertrain
+from .scoring import (
   MIN_RANK_DISTANCE, SPIRITED, FLAVOUR_NAMES, OFF, SUB_NAMES, DriveScore, Extra, driver_in_control, rank_letter,
 )
 from openpilot.system.ui.lib.multilang import tr

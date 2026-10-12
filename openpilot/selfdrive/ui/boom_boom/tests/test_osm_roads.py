@@ -9,7 +9,7 @@ import time
 import numpy as np
 
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import (
+from openpilot.selfdrive.ui.boom_boom.osm_roads import (
   ARTERIAL, MAJOR, MINOR, MPH, SERVICE, RoadIndex, RoadLoader, road_kind, schema, simplify, tile_path, to_local,
 )
 

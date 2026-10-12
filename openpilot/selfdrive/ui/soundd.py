@@ -16,7 +16,7 @@ from openpilot.common.hardware import HARDWARE
 
 from openpilot.sunnypilot.selfdrive.ui.alert_volume import AlertVolume
 from openpilot.sunnypilot.selfdrive.ui.quiet_mode import QuietMode
-from openpilot.sunnypilot.selfdrive.ui.shift_chime import ShiftChime
+from openpilot.selfdrive.ui.boom_boom.shift_chime import ShiftChime
 
 SAMPLE_RATE = 48000
 SAMPLE_BUFFER = 4096 # (approx 100ms)

@@ -19,7 +19,7 @@ import numpy as np
 import pyray as rl
 
 from openpilot.common.filter_simple import FirstOrderFilter
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import ARTERIAL, MAJOR, MINOR, SERVICE, RoadSet, to_local
+from .osm_roads import ARTERIAL, MAJOR, MINOR, SERVICE, RoadSet, to_local
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached

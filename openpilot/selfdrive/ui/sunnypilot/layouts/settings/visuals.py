@@ -5,8 +5,8 @@ This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 from openpilot.common.params import Params
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import extra_items as boom_boom_items
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import toggle_defs as boom_boom_toggle_defs
+from openpilot.selfdrive.ui.boom_boom.toggles import extra_items as boom_boom_items
+from openpilot.selfdrive.ui.boom_boom.toggles import toggle_defs as boom_boom_toggle_defs
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.sunnypilot.widgets.list_view import toggle_item_sp, multiple_button_item_sp

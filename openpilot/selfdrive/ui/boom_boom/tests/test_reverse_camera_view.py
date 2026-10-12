@@ -5,7 +5,7 @@ See the LICENSE.md file in the root directory for more details.
 import pyray as rl
 
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.reverse_camera_view import (
+from openpilot.selfdrive.ui.boom_boom.reverse_camera_view import (
   GAP, GearShifter, hides_alert, reverse_view_active, split_rects,
 )
 

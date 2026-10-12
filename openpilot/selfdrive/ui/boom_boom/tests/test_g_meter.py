@@ -6,7 +6,7 @@ import math
 
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.g_meter import (
+from openpilot.selfdrive.ui.boom_boom.g_meter import (
   FULL_SCALE_G, G, TRAIL_T, GMeter, dot_offset, g_from_car, g_from_device_motion,
 )
 

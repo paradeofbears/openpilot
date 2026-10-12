@@ -8,10 +8,10 @@ import numpy as np
 
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mini_map import (
+from openpilot.selfdrive.ui.boom_boom.mini_map import (
   Geometry, MiniMap, Status, clip_segments, location, to_screen,
 )
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import MAJOR, MINOR, Road, RoadSet
+from openpilot.selfdrive.ui.boom_boom.osm_roads import MAJOR, MINOR, Road, RoadSet
 
 LAT0, LON0 = 32.80, -96.80
 

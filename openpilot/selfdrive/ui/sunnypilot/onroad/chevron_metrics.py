@@ -8,7 +8,7 @@ import numpy as np
 
 import pyray as rl
 from openpilot.common.constants import CV
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lead_screen import publish as publish_lead_chevrons
+from openpilot.selfdrive.ui.boom_boom.lead_screen import publish as publish_lead_chevrons
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.text_measure import measure_text_cached

@@ -5,7 +5,7 @@ See the LICENSE.md file in the root directory for more details.
 from openpilot.cereal import log
 from openpilot.common.constants import CV
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import (
+from openpilot.selfdrive.ui.boom_boom.slow_reason import (
   CURVE, CURVE_MAP, FOLLOWING, HOLD_T, MODEL, SET_SPEED, SPEED_LIMIT, STOPPED_FOR_CAR, STOPPING, SWITCH_T,
   PlanSource, PlanSourceSP, ReasonDebouncer, SlowReasonPill, slowdown_reason,
 )

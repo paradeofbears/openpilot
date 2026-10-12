@@ -19,7 +19,7 @@ if gui_app.sunnypilot_ui():
   from openpilot.selfdrive.ui.sunnypilot.onroad.driver_state import DriverStateRendererSP as DriverStateRenderer
   from openpilot.selfdrive.ui.sunnypilot.onroad.hud_renderer import HudRendererSP as HudRenderer
   from openpilot.selfdrive.ui.sunnypilot.ui_state import OnroadTimerStatus
-  from openpilot.selfdrive.ui.sunnypilot.onroad.reverse_camera_view import ReverseCameraView, hides_alert
+  from openpilot.selfdrive.ui.boom_boom.reverse_camera_view import ReverseCameraView, hides_alert
 
 OpState = log.SelfdriveState.OpenpilotState
 CALIBRATED = log.ExtrinsicsCalibration.Status.calibrated

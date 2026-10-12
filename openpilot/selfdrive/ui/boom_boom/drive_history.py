@@ -10,7 +10,7 @@ score, points, distance, best 0-30), and only the last MAX_DRIVES are kept. Disp
 """
 import uuid
 
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import DriveScore
+from .scoring import DriveScore
 
 HISTORY = "BoomDriveHistory"
 MAX_DRIVES = 30
