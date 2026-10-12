@@ -39,8 +39,9 @@ MIN_BOX_H = 300
 MARGIN = 50
 TOP_CLEAR = 270          # below the experimental-mode button in the top-right corner
 TITLE_SIZE = 32
-CAR_W, CAR_H = 30, 50
-TRACK_R = 11
+CAR_W, CAR_H = 30, 50   # our own car
+LEAD_R = 17             # radarState's leads
+TRACK_R = 11            # raw radar tracks
 
 BG = rl.Color(0, 0, 0, 150)
 FRAME = rl.Color(255, 255, 255, 90)
@@ -181,11 +182,8 @@ class TrafficBox:
       if not to_px.inside(c.d, c.y):
         continue
       x, y = to_px(c.d + 2.0, c.y)  # dRel is the bumper; draw the car's middle
-      color = _fade(car_color(c), a)
-      if c.lead:
-        rl.draw_rectangle_rounded(rl.Rectangle(x - CAR_W / 2, y - CAR_H / 2, CAR_W, CAR_H), 0.35, 8, color)
-      else:
-        rl.draw_circle_v(rl.Vector2(x, y), TRACK_R, color)
+      # dots, not car shapes: a block reads as part of the lane lines it sits between
+      rl.draw_circle_v(rl.Vector2(x, y), LEAD_R if c.lead else TRACK_R, _fade(car_color(c), a))
     rl.end_scissor_mode()
 
     # our car, nose at d = 0
