@@ -323,6 +323,8 @@ class TripCard:
     tx = x + 2 * BADGE_R + 28
     if letter:
       caption = tr(FLAVOUR_NAMES[sc.flavour] + " RANK")
+    elif sc.flavour == SPIRITED and sc.driver_distance >= MIN_RANK_DISTANCE:
+      caption = tr("drive more spirited to rank")
     elif sc.driver_distance >= MIN_RANK_DISTANCE:
       caption = tr("nothing to rank yet")
     else:

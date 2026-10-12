@@ -6,7 +6,7 @@ from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
   BLIND_SPOT_POINTS, CLEAN_LAUNCH_POINTS, CLEAN_POINTS, CONTROLLED_STOP_POINTS, DISTRACTED_POINTS, LIMITER_POINTS, MIN_RANK_DISTANCE, MPH,
-  PERFECT_SHIFT_POINTS, SAFETY, CLEAN_BEND_POINTS, SMOOTH_STOP_POINTS, SPIRITED, STREAK_MAX, TAILGATE_HOLD, TAILGATE_POINTS, WEAK_LINK,
+  PERFECT_SHIFT_POINTS, SAFETY, CLEAN_BEND_POINTS, SPIRITED_MIN_MOMENTS, SMOOTH_STOP_POINTS, SPIRITED, STREAK_MAX, TAILGATE_HOLD, TAILGATE_POINTS, WEAK_LINK,
   DriveScore, Extra, driver_in_control, rank_letter,
 )
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import TripCard
@@ -125,16 +125,27 @@ class TestRank(OpenpilotTestCase):
       drive(s, 100.0)  # 2 km smooth
     assert calm.rank() == "S" and brisk.rank() is None  # nothing spirited to judge yet
     for s in (calm, brisk):
-      for _ in range(5):  # clean, brisk launches, rolling on and off the throttle
+      for _ in range(8):  # clean, brisk launches, rolling on and off the throttle
         for i in range(60):
           s.update(DT, 20.0, 3.5 * min(1.0, i / 15, (60 - i) / 15), True, False, 100.0)
         drive(s, 10.0)
     assert calm.rank_score() < 85 and brisk.rank() == "S"
 
+  def test_spirited_needs_enough_spirited_driving_to_rank(self):
+    s = DriveScore(flavour=SPIRITED)
+    drive(s, 100.0)
+    for _ in range(SPIRITED_MIN_MOMENTS - 1):
+      drive(s, 1.0, a=3.0)
+      drive(s, 10.0)
+    assert s.sub_scores() is not None and s.rank() is None and s.points > 0  # points still count
+    drive(s, 1.0, a=3.0)
+    drive(s, 10.0)
+    assert s.rank() is not None
+
   def test_spirited_rank_punishes_sloppy_launches(self):
     s = DriveScore(flavour=SPIRITED)
     drive(s, 100.0)
-    for _ in range(5):  # launch, then stamp on the brake
+    for _ in range(8):  # launch, then stamp on the brake
       drive(s, 1.0, a=3.0)
       drive(s, 0.5, a=-5.0)
       drive(s, 10.0)

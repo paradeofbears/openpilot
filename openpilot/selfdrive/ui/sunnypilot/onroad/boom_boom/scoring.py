@@ -89,6 +89,8 @@ PERFECT_BAND = (900.0, 150.0)  # an upshift with its peak this far below the rev
 SHIFT_LOOKBACK = 1.0       # s of revs before an upshift its peak is taken over
 CLOSE_LEAD_M = 25.0        # a standing start with a car closer than this ahead is not a launch run
 MIN_RANK_DISTANCE = 1000.0  # m of the driver's own driving before a rank means anything
+SPIRITED_MIN_MOMENTS = 8   # launches, bends and manual upshifts before spirited ranks: a calm drive is not ranked
+                           # (routes 11 and 18 had 6-7, the spirited 10, 12, 15 and 17 had 10-44)
 MIN_DATA_T = 30.0          # s of a sub-score's data before it counts
 
 # points: arcade-sized, so a drive scores in the thousands; the ratios between events are what matter
@@ -611,10 +613,15 @@ class DriveScore:
       engine = _clip(60.0 + 40.0 * self.eco_t / self.rpm_t - 10.0 * self._per10(self.limiter_hits))
     return _clip(smoothness), following, awareness, engine
 
+  @property
+  def spirited_moments(self) -> int:
+    return self.launches_judged + self.bends + (self.upshifts if self.manual_t > 0 else 0)
+
   def rank_score(self) -> float | None:
-    """0..100 for the chosen flavour, or None before enough of the driver's own driving."""
+    """0..100 for the chosen flavour, or None before enough of the driver's own driving (or, in spirited, before
+    enough spirited driving)."""
     subs = self.sub_scores()
-    if subs is None:
+    if subs is None or (self.flavour == SPIRITED and self.spirited_moments < SPIRITED_MIN_MOMENTS):
       return None
     pairs = [(s, w) for s, w in zip(subs, WEIGHTS[self.flavour], strict=True) if s is not None]
     if not pairs:
