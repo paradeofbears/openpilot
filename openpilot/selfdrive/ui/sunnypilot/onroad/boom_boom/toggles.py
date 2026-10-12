@@ -35,7 +35,8 @@ def extra_items(params) -> list:
     multiple_button_item_sp(
       title=lambda: tr("Drive Rank and Points"),
       description=lambda: tr("Rank your own driving S to D and score points while you drive. Safety rewards smooth " +
-                             "driving; Spirited rewards hard launches and stops, never speed. Tailgating costs points in " +
+                             "driving; Spirited rewards clean launches, controlled stops, cornering and well-timed shifts, " +
+                             "never speed or hard braking. Tailgating costs points in " +
                              "both. Only stretches where you set the speed count, not openpilot or cruise. The rank " +
                              "shows on the Park summary; the points to the right of the speed."),
       buttons=[lambda: tr("Off"), lambda: tr("Safety"), lambda: tr("Spirited")],

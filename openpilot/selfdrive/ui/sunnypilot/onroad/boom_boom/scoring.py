@@ -12,8 +12,10 @@ driver's. Rates are per 10 km of that distance; the points do not feed the rank.
 SAFETY sub-scores: Smoothness (hard brakes and launches, jerk, hard corners, steering, smooth stops),
 Following (tailgating, average time gap, closest time to collision), Awareness (distraction, signalling into
 an occupied blind spot, speed over a known limit), Engine (economical revs and throttle, no limiter hits).
-SPIRITED sub-scores: Aggression (hard launches and stops), Cornering (peak lateral G), Shifting (perfect shifts
-in manual mode, limiter hits cost), and Discipline (Following and Awareness, the same penalties as Safety).
+SPIRITED sub-scores: Control (clean launches and controlled stops, no panic braking or harsh jerks), Cornering
+(peak lateral G), Shifting (perfect shifts in manual mode, limiter hits cost), and Discipline (Following and
+Awareness, the same penalties as Safety). Spirited rewards doing it well, not doing it hard: a launch scores the
+same however hard it is, as long as it is clean, and braking hard never scores.
 
 A sub-score with no data is left out (None) rather than counted as zero, and the rank is the weighted mean of
 the rest, capped at WEAK_LINK above the weakest: one terrible category cannot be averaged away. Speed is never
@@ -30,7 +32,7 @@ from dataclasses import dataclass, field
 OFF, SAFETY, SPIRITED = 0, 1, 2
 FLAVOUR_NAMES = {SAFETY: "SAFETY", SPIRITED: "SPIRITED"}
 SUB_NAMES = {SAFETY: ("SMOOTH", "FOLLOWING", "AWARENESS", "ENGINE"),
-             SPIRITED: ("AGGRESSION", "CORNERING", "SHIFTING", "DISCIPLINE")}
+             SPIRITED: ("CONTROL", "CORNERING", "SHIFTING", "DISCIPLINE")}
 WEIGHTS = {SAFETY: (45, 20, 20, 15), SPIRITED: (35, 20, 20, 25)}
 WEAK_LINK = 40.0           # the rank is never more than this above the weakest sub-score
 SMOOTH_DECAY = 30.0        # weighted incidents per 10 km that take Smoothness to 37
@@ -54,6 +56,10 @@ STEER_FAST_SPEED = 15.0    # m/s; below this, fast steering is turning at juncti
 STOP_WINDOW_T = 3.0        # s before standstill a stop is judged over
 SMOOTH_STOP_DECEL = 2.0    # m/s^2 peak decel into a smooth stop (reference median 1.45)
 SMOOTH_STOP_JERK = 4.0     # m/s^3 peak smoothed jerk into a smooth stop
+CONTROLLED_STOP_DECEL = 4.0  # spirited: a firm stop is fine, up to this peak decel
+CONTROLLED_STOP_JERK = 6.0   # spirited: and no stab at the pedal
+PANIC_DECEL = 4.5          # m/s^2 peak of a hard brake that counts as a panic stop
+CLEAN_LAUNCH_T = 3.0       # s after a hard launch with no hard brake (and no limiter hit) for it to be clean
 TAILGATE_GAP = 1.0         # s of time gap
 TAILGATE_EXIT_GAP = 1.3
 TAILGATE_SPEED = 11.0      # m/s (~25 mph); closer than this in town traffic is normal
@@ -85,8 +91,8 @@ BLIND_SPOT_POINTS = -100 * POINTS_SCALE
 DISTRACTED_POINTS = -50 * POINTS_SCALE
 LIMITER_POINTS = -50 * POINTS_SCALE   # spirited; in safety a limiter hit breaks the streak instead
 SMOOTH_STOP_POINTS = 20 * POINTS_SCALE  # safety
-LAUNCH_POINTS = 100 * POINTS_SCALE  # spirited, per m/s^2 of peak acceleration
-STOP_POINTS = 50 * POINTS_SCALE     # spirited, per m/s^2 of peak deceleration
+CLEAN_LAUNCH_POINTS = 250 * POINTS_SCALE  # spirited, the same however hard the launch
+CONTROLLED_STOP_POINTS = 100 * POINTS_SCALE  # spirited
 CORNER_POINTS = 400 * POINTS_SCALE  # spirited, per g of peak lateral acceleration
 PERFECT_SHIFT_POINTS = 150 * POINTS_SCALE  # spirited
 COMBO_WINDOW_S = 10.0      # spirited: events this close together chain
@@ -183,6 +189,13 @@ class DriveScore:
   _streak_t: float = 0.0
   _clean_m: float = 0.0
   _combo: int = 0
+  # spirited control
+  launches_judged: int = 0
+  clean_launches: int = 0
+  controlled_stops: int = 0
+  panic_brakes: int = 0
+  _launch_check: float | None = None  # s left to watch a finished launch
+  _launch_marks: tuple = (0, 0)       # (hard brakes, limiter hits) when the launch began
   _since_event: float = 1e9
   _prev_a: float | None = None
   _jerk: float = 0.0
@@ -231,6 +244,7 @@ class DriveScore:
     self._jerk_update(dt, a)
     self._stops_update(dt, v, a, driver)
     self._launch_update(dt, v, driver, lead_present, d_rel)
+    self._judge_launch(dt)
     if not driver or v < MOVING:
       self._braking = self._launching = False
       self._tail_t, self._tailgating = 0.0, False
@@ -276,15 +290,16 @@ class DriveScore:
       self._peak = max(self._peak, -a)
       if a > HARD_BRAKE_EXIT:
         self._braking = False
-        self._event("STOP", self._peak, points_per=STOP_POINTS)
+        self._event("STOP", self._peak)
     if not self._launching and a > HARD_LAUNCH:
       self._launching, self._peak = True, a
       self.hard_launches += 1
+      self._launch_marks = (self.hard_brakes, self.limiter_hits)
     elif self._launching:
       self._peak = max(self._peak, a)
       if a < HARD_LAUNCH_EXIT:
         self._launching = False
-        self._event("LAUNCH", self._peak, points_per=LAUNCH_POINTS)
+        self._event("LAUNCH", self._peak)
 
   def _harsh_jerk(self) -> None:
     j = abs(self._jerk)
@@ -293,6 +308,8 @@ class DriveScore:
       self.harsh_jerks += 1
       if self.flavour == SAFETY:
         self._incident("JERKY")
+      elif self.flavour == SPIRITED:
+        self._combo_lost()
     elif self._jerking and j < HARSH_JERK_EXIT:
       self._jerking = False
 
@@ -336,6 +353,10 @@ class DriveScore:
         if self.flavour == SAFETY:
           self.points += SMOOTH_STOP_POINTS
           self._pop(f"+{SMOOTH_STOP_POINTS:,} SMOOTH STOP")
+      if peak_decel < CONTROLLED_STOP_DECEL and peak_jerk < CONTROLLED_STOP_JERK:
+        self.controlled_stops += 1
+        if self.flavour == SPIRITED:
+          self._spirited_points("CLEAN STOP", CONTROLLED_STOP_POINTS)
       self._stop_window = []
     else:
       self._stop_window = []
@@ -445,13 +466,38 @@ class DriveScore:
     self.points += gained
     self._pop(f"+{gained:,} {name}" + (f" x{self._combo}" if self._combo > 1 else ""))
 
-  def _event(self, name: str, peak: float, points_per: int) -> None:
+  def _event(self, name: str, peak: float) -> None:
     """A finished hard brake or launch with its peak |accel| in m/s^2."""
+    if name == "LAUNCH":
+      self._launch_check = CLEAN_LAUNCH_T  # judged once it is clear what followed it
+    elif peak > PANIC_DECEL:
+      self.panic_brakes += 1
+      if self.flavour == SPIRITED:
+        self._combo_lost()
     if self.flavour == SAFETY:
       self._streak_t = STREAK_STEP_S  # always announce: a hard event is the thing the streak is about
       self._incident(name)
+
+  def _judge_launch(self, dt: float) -> None:
+    if self._launch_check is None:
       return
-    self._spirited_points(name, int(round(points_per * peak)))
+    self._launch_check -= dt
+    if self.hard_brakes > self._launch_marks[0] or self.limiter_hits > self._launch_marks[1]:
+      self._launch_check = None
+      self.launches_judged += 1
+      return
+    if self._launch_check <= 0:
+      self._launch_check = None
+      self.launches_judged += 1
+      self.clean_launches += 1
+      if self.flavour == SPIRITED:
+        self._spirited_points("CLEAN LAUNCH", CLEAN_LAUNCH_POINTS)
+
+  def _combo_lost(self) -> None:
+    if self._combo > 1:
+      self._pop("COMBO LOST")
+    self._combo = 0
+    self._since_event = 1e9
 
   # ---- the rank -------------------------------------------------------------------------------------------
 
@@ -485,14 +531,17 @@ class DriveScore:
     brakes, launches = self._per10(self.hard_brakes), self._per10(self.hard_launches)
     following, awareness = self.following(), self.awareness()
     if self.flavour == SPIRITED:
-      aggression = _clip(100.0 * (1.0 - math.exp(-(brakes + launches) / 4.0)))
+      control = None
+      if self.launches_judged + self.stops:
+        clean = (self.clean_launches + self.controlled_stops) / (self.launches_judged + self.stops)
+        control = _clip(100.0 * clean - 1.0 * self._per10(self.harsh_jerks) - 10.0 * self._per10(self.panic_brakes))
       cornering = _clip(100.0 * self.peak_lat_g / 0.5) if self.lat_t >= MIN_DATA_T else None
       shifting = None
       if self.manual_t >= MIN_DATA_T or self.perfect_shifts:
         shifting = _clip(100.0 * (1.0 - math.exp(-self.perfect_shifts / 3.0)) - 5.0 * self.limiter_hits)
       parts = [p for p in (following, awareness) if p is not None]
       discipline = min(parts) if parts else None
-      return aggression, cornering, shifting, discipline
+      return control, cornering, shifting, discipline
     # smoothness: incidents per 10 km, weighted, decaying so a short spirited stretch is not a zero
     incidents = brakes + 0.7 * launches + 0.25 * self._per10(self.harsh_jerks) + 0.7 * self._per10(self.hard_corners)
     smooth_share = self.smooth_time / self.driver_time if self.driver_time > 0 else 1.0
@@ -512,6 +561,8 @@ class DriveScore:
     if subs is None:
       return None
     pairs = [(s, w) for s, w in zip(subs, WEIGHTS[self.flavour], strict=True) if s is not None]
+    if not pairs:
+      return None  # nothing yet that this style judges
     mean = sum(s * w for s, w in pairs) / sum(w for _, w in pairs)
     return _clip(min(mean, min(s for s, _ in pairs) + WEAK_LINK))
 

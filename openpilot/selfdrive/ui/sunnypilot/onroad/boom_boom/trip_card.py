@@ -20,7 +20,7 @@ from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_history import DriveHistory
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import Powertrain
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
-  SPIRITED, FLAVOUR_NAMES, OFF, SUB_NAMES, DriveScore, Extra, driver_in_control, rank_letter,
+  MIN_RANK_DISTANCE, SPIRITED, FLAVOUR_NAMES, OFF, SUB_NAMES, DriveScore, Extra, driver_in_control, rank_letter,
 )
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -264,7 +264,7 @@ class TripCard:
         (f"{sc.peak_lat_g:.2f} g" if sc.lat_t > 0 else "-", tr("peak cornering")),
         (f"{launch:.1f} s" if launch is not None else "-", launch_label),
         (f"{sc.perfect_shifts}/{sc.upshifts}" if sc.manual_t > 0 else "-", tr("perfect shifts")),
-        (str(sc.limiter_hits) if sc.rpm_t > 0 else "-", tr("limiter hits")),
+        (f"{sc.clean_launches}/{sc.launches_judged}" if sc.launches_judged else "-", tr("clean launches")),
       ] + shared
     gap = f"{sc.gap_sum / sc.gap_t:.1f} s" if sc.gap_t > 0 else "-"
     eyes = f"{100 * (1 - s.share(sc.distracted_t, sc.dm_t)):.0f}%" if sc.dm_t > 0 else "-"
@@ -320,7 +320,12 @@ class TripCard:
     rl.draw_text_ex(bold, text, rl.Vector2(cx - size.x / 2, cy - size.y / 2), BADGE_SIZE, 0, _fade(color, a))
 
     tx = x + 2 * BADGE_R + 28
-    caption = tr(FLAVOUR_NAMES[sc.flavour] + " RANK") if letter else tr("drive 1 km yourself to rank")
+    if letter:
+      caption = tr(FLAVOUR_NAMES[sc.flavour] + " RANK")
+    elif sc.driver_distance >= MIN_RANK_DISTANCE:
+      caption = tr("nothing to rank yet")
+    else:
+      caption = tr("drive 1 km yourself to rank")
     rl.draw_text_ex(medium, caption, rl.Vector2(tx, y + 8), LABEL_SIZE, 0, _fade(LABEL, a))
     rl.draw_text_ex(semi, f"{sc.points:,} " + tr("pts"), rl.Vector2(tx, y + 8 + LABEL_SIZE + 6), 56, 0, _fade(VALUE, a))
     if self.history.line:

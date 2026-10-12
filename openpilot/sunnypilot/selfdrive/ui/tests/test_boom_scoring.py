@@ -5,8 +5,8 @@ See the LICENSE.md file in the root directory for more details.
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
-  BLIND_SPOT_POINTS, SPIRITED, CLEAN_POINTS, DISTRACTED_POINTS, LAUNCH_POINTS, LIMITER_POINTS, MIN_RANK_DISTANCE, MPH,
-  PERFECT_SHIFT_POINTS, SAFETY, SMOOTH_STOP_POINTS, STOP_POINTS, STREAK_MAX, TAILGATE_HOLD, TAILGATE_POINTS, WEAK_LINK,
+  BLIND_SPOT_POINTS, CLEAN_LAUNCH_POINTS, CLEAN_POINTS, CONTROLLED_STOP_POINTS, DISTRACTED_POINTS, LIMITER_POINTS, MIN_RANK_DISTANCE, MPH,
+  PERFECT_SHIFT_POINTS, SAFETY, SMOOTH_STOP_POINTS, SPIRITED, STREAK_MAX, TAILGATE_HOLD, TAILGATE_POINTS, WEAK_LINK,
   DriveScore, Extra, driver_in_control, rank_letter,
 )
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import TripCard
@@ -68,21 +68,39 @@ class TestPoints(OpenpilotTestCase):
     drive(s, 0.5)
     assert s.streak == 1 and any("STREAK LOST" in p.text for p in s.popups)
 
-  def test_spirited_scores_events_and_chains_combos(self):
+  def test_spirited_scores_clean_launches_the_same_however_hard(self):
+    gentle, hard = DriveScore(flavour=SPIRITED), DriveScore(flavour=SPIRITED)
+    for s, a in ((gentle, 2.7), (hard, 4.0)):
+      drive(s, 0.5, a=a)
+      drive(s, 1.0)
+      assert s.points == 0  # not yet: it depends on what follows
+      drive(s, 3.0)
+      assert s.points == CLEAN_LAUNCH_POINTS == 25_000 and s.popups[-1].text == "+25,000 CLEAN LAUNCH"
+    assert (gentle.clean_launches, gentle.launches_judged) == (1, 1)
+
+  def test_launching_into_a_hard_brake_is_not_clean_and_braking_never_scores(self):
     s = DriveScore(flavour=SPIRITED)
-    drive(s, 0.5, a=3.0)
+    drive(s, 0.5, a=3.5)
+    drive(s, 1.0)
+    drive(s, 0.5, a=-5.0)  # a panic stop straight after
+    drive(s, 5.0)
+    assert s.points == 0 and (s.clean_launches, s.launches_judged, s.panic_brakes) == (0, 1, 1)
+
+  def test_controlled_stops_chain_and_panic_breaks_the_combo(self):
+    s = DriveScore(flavour=SPIRITED)
+    for _ in range(2):
+      v = 15.0
+      for i in range(400):  # a firm, progressive stop: easing in to -3 m/s^2
+        a = -3.0 * min(1.0, i / 30)
+        v = max(0.0, v + a * DT)
+        s.update(DT, v, a, True, False, 100.0)
+        if v == 0.0:
+          break
+      drive(s, 1.0, v=0.0)
+    assert s.controlled_stops == 2 and s.points == CONTROLLED_STOP_POINTS * 3  # the second at x2
+    drive(s, 0.5, a=-5.0)
     drive(s, 0.5)
-    first = s.points
-    assert first == 3 * LAUNCH_POINTS == 30_000  # arcade-sized: a 3 m/s^2 launch is 30,000
-    assert s.popups[-1].text == "+30,000 LAUNCH"
-    drive(s, 2.0)
-    drive(s, 0.5, a=-4.0)
-    drive(s, 0.5)
-    assert s.points == first + 4 * STOP_POINTS * 2  # x2 combo
-    drive(s, 30.0)  # combo window lapses
-    drive(s, 0.5, a=3.0)
-    drive(s, 0.5)
-    assert s.points == first + 4 * STOP_POINTS * 2 + first
+    assert s._combo == 0 and any(p.text == "COMBO LOST" for p in s.popups)
 
   def test_spirited_never_scores_speed(self):
     s = DriveScore(flavour=SPIRITED)
@@ -102,16 +120,25 @@ class TestRank(OpenpilotTestCase):
     assert s.rank() == "S"
 
   def test_flavours_disagree_about_the_same_drive(self):
-    calm, wild = DriveScore(flavour=SAFETY), DriveScore(flavour=SPIRITED)
-    for s in (calm, wild):
+    calm, brisk = DriveScore(flavour=SAFETY), DriveScore(flavour=SPIRITED)
+    for s in (calm, brisk):
       drive(s, 100.0)  # 2 km smooth
-    assert (calm.rank(), wild.rank()) == ("S", "D")
-    for s in (calm, wild):
-      for _ in range(5):
-        drive(s, 0.5, a=3.5)
-        drive(s, 0.5, a=-4.5)
-        drive(s, 5.0)
-    assert calm.rank() in ("C", "D") and wild.rank() in ("S", "A")
+    assert calm.rank() == "S" and brisk.rank() is None  # nothing spirited to judge yet
+    for s in (calm, brisk):
+      for _ in range(5):  # clean, brisk launches, rolling on and off the throttle
+        for i in range(60):
+          s.update(DT, 20.0, 3.0 * min(1.0, i / 15, (60 - i) / 15), True, False, 100.0)
+        drive(s, 10.0)
+    assert calm.rank_score() < 85 and brisk.rank() == "S"
+
+  def test_spirited_rank_punishes_sloppy_launches(self):
+    s = DriveScore(flavour=SPIRITED)
+    drive(s, 100.0)
+    for _ in range(5):  # launch, then stamp on the brake
+      drive(s, 1.0, a=3.0)
+      drive(s, 0.5, a=-5.0)
+      drive(s, 10.0)
+    assert s.sub_scores()[0] == 0.0 and s.rank() == "D"
 
 
 class TestTripCardScore(OpenpilotTestCase):
