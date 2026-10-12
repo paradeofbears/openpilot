@@ -89,7 +89,7 @@ class BoomBoomOverlays(Widget):
     self.mini_map = MiniMap()
     self._road_loader: RoadLoader | None = None  # started the first time the mini-map is on
     self.shift_lights = ShiftLights()
-    self._can_tap = CanTap()  # subscribes to `can` only while the shift lights are on
+    self._can_tap = CanTap()  # subscribes to `can` only while the shift lights or the rank are on
     self._widgets = (self.slow_reason, self.steer_arc, self.g_meter, self.trip_card, self.traffic, self.lane_awareness,
                      self.mini_map, self.shift_lights)
 
@@ -101,7 +101,7 @@ class BoomBoomOverlays(Widget):
       self._mapd_version = v.decode() if isinstance(v, bytes) else v
     style = ui_state.params.get(RANK_STYLE)
     self.rank_style = style if isinstance(style, int) and OFF <= style <= CHAOS else OFF
-    if self._enabled.get(SHIFT_LIGHTS):
+    if self._enabled.get(SHIFT_LIGHTS) or self.rank_style != OFF:
       self.rev_limit = _option(ui_state.params.get(SHIFT_REV_LIMIT), REV_LIMIT_OPTIONS, DEFAULT_REV_LIMIT)
       self.lead = _option(ui_state.params.get(SHIFT_LEAD), LEAD_OPTIONS, DEFAULT_LEAD)
       self.shift_point = _option(ui_state.params.get(SHIFT_POINT), SHIFT_POINT_OPTIONS, AUTO)
@@ -197,23 +197,25 @@ class BoomBoomOverlays(Widget):
       self._guard(STEER_LIMIT_ARC, self.steer_arc.update, sm, self._rail(), dt)
     if self.on(G_METER):
       self._guard(G_METER, self.g_meter.update, sm, self._extra(extra, 'deviceMotion'), dt)
+    pt = None
+    if self.on(SHIFT_LIGHTS) or self.ranking:
+      pt = self._guard(SHIFT_LIGHTS, self._can_tap.update)
+    else:
+      self._can_tap.close()
     if self.on(TRIP_CARD) or self.ranking:
       flavour = self.rank_style if self.ranking else OFF
       self._guard(TRIP_CARD, self.trip_card.update, sm, ui_state.engaged, ui_state.has_longitudinal_control, self._gps(), dt,
-                  flavour)
+                  flavour, pt, self.rev_limit)
     if self.on(TRAFFIC):
       self._guard(TRAFFIC, self.traffic.update, sm, self._extra(extra, 'radarTracks'), ui_state.engaged)
     if self.on(LANE_AWARENESS):
       self._guard(LANE_AWARENESS, self.lane_awareness.update, sm, dt)
     if self.on(MINI_MAP):
       self._guard(MINI_MAP, self._update_mini_map, sm, self._extra(extra, 'liveLocationKalman'))
-    if self.on(SHIFT_LIGHTS):
-      self._guard(SHIFT_LIGHTS, self._update_shift_lights, dt)
-    else:
-      self._can_tap.close()
+    if self.on(SHIFT_LIGHTS) and pt is not None:
+      self._guard(SHIFT_LIGHTS, self._update_shift_lights, pt, dt)
 
-  def _update_shift_lights(self, dt: float) -> None:
-    pt = self._can_tap.update()
+  def _update_shift_lights(self, pt, dt: float) -> None:
     if self.shift_lights.update(pt, self.rev_limit, self.shift_point, dt, self.lead) and self.on(SHIFT_CHIME):
       ui_state.params.put(SHIFT_CHIME_REQUEST, "1")  # soundd plays it if nothing else is sounding
 

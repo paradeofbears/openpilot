@@ -9,6 +9,7 @@ frames. Nothing is sent and no driving process is touched. Mapped on a 2022 CX-5
 (routes 00000007, 00000008, 2026-10-12):
 
   ENGINE_DATA 0x202 RPM          100 Hz  engine speed (DBC signal; idle ~610-760, matches the tach)
+  ENGINE_DATA 0x202 PEDAL_GAS    100 Hz  accelerator pedal, raw (cruising ~260, full throttle ~2000-2070)
   GEAR 0x228 MORE_GEAR           50 Hz   engaged gear, 1-6 (DBC's GEAR_BOX is the target, ~0.3 s ahead)
   0x131 byte 2 bit 7             50 Hz   manual mode: lever in the M gate (also 0x09E byte 1 bit 2, 10 Hz)
 
@@ -34,6 +35,7 @@ def _dbc_signals():
     dbc = DBC("mazda_2017")
     _signals = {
       "rpm": (ENGINE_DATA, dbc.name_to_msg["ENGINE_DATA"].sigs["RPM"]),
+      "pedal": (ENGINE_DATA, dbc.name_to_msg["ENGINE_DATA"].sigs["PEDAL_GAS"]),
       "gear": (GEAR, dbc.name_to_msg["GEAR"].sigs["MORE_GEAR"]),
     }
   return _signals
@@ -63,6 +65,7 @@ class Powertrain:
   rpm: float | None = None
   gear: int | None = None
   manual: bool | None = None
+  pedal: float | None = None
 
 
 class CanTap:
@@ -96,4 +99,4 @@ class CanTap:
       v = self._values.get(name)
       return v[0] if v is not None and now - v[1] < STALE_T else None
     gear = fresh("gear")
-    return Powertrain(fresh("rpm"), int(gear) if gear is not None else None, fresh("manual"))
+    return Powertrain(fresh("rpm"), int(gear) if gear is not None else None, fresh("manual"), fresh("pedal"))

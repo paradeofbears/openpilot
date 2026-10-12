@@ -17,7 +17,10 @@ from opendbc.car.structs import car
 from openpilot.common.constants import CV
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.system.ui.lib.application import FontWeight, gui_app
-from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import FLAVOUR_NAMES, OFF, DriveScore, driver_in_control
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import Powertrain
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
+  FLAVOUR_NAMES, OFF, DriveScore, Extra, driver_in_control,
+)
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 
@@ -132,6 +135,45 @@ class TripStats:
     return part / whole if whole > 0 else 0.0
 
 
+def _soft(fn, default):
+  """An optional score input: when its service or field is missing, the score does without it."""
+  try:
+    return fn()
+  except (KeyError, AttributeError):
+    return default
+
+
+def speed_limit(sm) -> float:
+  """The best known speed limit in m/s, 0 when none: the car's sign reading or sunnypilot's resolver, else the map."""
+  best = max(sm['carStateSP'].speedLimit, sm['longitudinalPlanSP'].speedLimit.resolver.speedLimit)
+  if best > 0:
+    return best
+  m = sm['liveMapDataSP']
+  return m.speedLimit if m.speedLimitValid else 0.0
+
+
+def distracted(sm) -> bool | None:
+  """Driver monitoring's verdict, None while it is not running."""
+  if not sm.alive['driverMonitoringState']:
+    return None
+  return bool(sm['driverMonitoringState'].visionPolicyState.isDistracted)
+
+
+def score_inputs(sm, pt: Powertrain | None, rev_limit: float) -> Extra:
+  cs = sm['carState']
+  pt = pt or Powertrain()
+  return Extra(
+    lat_g=_soft(lambda: abs(sm['controlsState'].curvature) * cs.vEgo ** 2 / 9.81, None),
+    steer_rate=cs.steeringRateDeg,
+    v_rel=_soft(lambda: sm['radarState'].leadOne.vRel, 0.0),
+    distracted=_soft(lambda: distracted(sm), None),
+    blinker_left=cs.leftBlinker, blinker_right=cs.rightBlinker,
+    blind_spot_left=cs.leftBlindspot, blind_spot_right=cs.rightBlindspot,
+    speed_limit=_soft(lambda: speed_limit(sm), 0.0),
+    rpm=pt.rpm, pedal=pt.pedal, gear=pt.gear, manual=bool(pt.manual), rev_limit=rev_limit,
+  )
+
+
 def fmt_duration(seconds: float) -> str:
   m = int(seconds // 60)
   return f"{m // 60}h {m % 60:02d}m" if m >= 60 else f"{m} min"
@@ -152,7 +194,8 @@ class TripCard:
     self._alpha.x = 0.0
     self._show = False
 
-  def update(self, sm, engaged: bool, has_long_control: bool, gps, dt: float, flavour: int = OFF) -> None:
+  def update(self, sm, engaged: bool, has_long_control: bool, gps, dt: float, flavour: int = OFF,
+             pt: Powertrain | None = None, rev_limit: float = 5900.0) -> None:
     cs = sm['carState']
     cc = sm['carControl']
     self._has_long = has_long_control
@@ -163,7 +206,7 @@ class TripCard:
     if flavour != OFF:
       lead = sm['radarState'].leadOne
       driver = driver_in_control(cs.cruiseState.enabled, cc.longActive, cs.gasPressed)
-      self.score.update(dt, cs.vEgo, cs.aEgo, driver, lead.present, lead.dRel)
+      self.score.update(dt, cs.vEgo, cs.aEgo, driver, lead.present, lead.dRel, score_inputs(sm, pt, rev_limit))
     parked = cs.gearShifter == GearShifter.park
     self._show = parked and self.stats.distance >= MIN_SHOW_DISTANCE
     self._alpha.update(1.0 if self._show else 0.0)

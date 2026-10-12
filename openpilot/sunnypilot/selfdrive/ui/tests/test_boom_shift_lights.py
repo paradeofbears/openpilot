@@ -42,7 +42,7 @@ class TestDecode(OpenpilotTestCase):
     tap = CanTap()
     other_bus = SimpleNamespace(src=2, address=0x202, dat=frame("ENGINE_DATA", {"RPM": 9000}).dat)
     tap.feed([frame("ENGINE_DATA", {"RPM": 2000}), frame("GEAR", {"MORE_GEAR": 2}), manual_frame(True), other_bus], 10.0)
-    assert tap.read(10.1) == Powertrain(2000.0, 2, True)  # the camera bus copy is ignored
+    assert tap.read(10.1) == Powertrain(2000.0, 2, True, 0.0)  # the camera bus copy is ignored
     assert tap.read(10.0 + STALE_T + 0.01) == Powertrain(None, None, None)
 
 
