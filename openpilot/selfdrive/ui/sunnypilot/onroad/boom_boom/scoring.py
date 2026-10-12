@@ -163,6 +163,7 @@ class DriveScore:
   tailgates: int = 0
   points: int = 0
   popups: list[Popup] = field(default_factory=list)
+  marks: list[tuple[str, bool, float]] = field(default_factory=list)  # (bend|launch|stop|brake, clean, s ago) for the map
   # smoothness
   harsh_jerks: int = 0
   hard_corners: int = 0
@@ -208,6 +209,7 @@ class DriveScore:
   controlled_stops: int = 0
   panic_brakes: int = 0
   _launch_check: float | None = None  # s left to watch a finished launch
+  _launch_age: float = 0.0            # s since the current launch began
   _launch_marks: tuple = (0, 0)       # (hard brakes, limiter hits) when the launch began
   _since_event: float = 1e9
   _prev_a: float | None = None
@@ -225,6 +227,7 @@ class DriveScore:
   _bend_peak: float = 0.0
   _bend_dip: float = 0.0
   _bend_wobbled: bool = False
+  _bend_since_peak: float = 0.0
   _bend_marks: tuple = (0, 0)  # (hard brakes, harsh jerks) at turn-in
   _stop_window: list = field(default_factory=list)  # (age, a, |jerk|) over the last STOP_WINDOW_T
   _distracted_run: float = 0.0
@@ -267,6 +270,7 @@ class DriveScore:
     self._jerk_update(dt, v, a)
     self._stops_update(dt, v, a, driver)
     self._launch_update(dt, v, driver, lead_present, d_rel)
+    self._launch_age += dt
     self._judge_launch(dt)
     if not driver or v < MOVING:
       self._braking = self._launching = False
@@ -321,6 +325,7 @@ class DriveScore:
       self._launching, self._peak = True, a
       self.hard_launches += 1
       self._launch_marks = (self.hard_brakes, self.limiter_hits)
+      self._launch_age = 0.0
     elif self._launching:
       self._peak = max(self._peak, a)
       if a < launch_exit:
@@ -366,7 +371,9 @@ class DriveScore:
         self._bend_on, self._bend_t, self._bend_wobbled = True, 0.0, False
         self._bend_peak = self._bend_dip = g
         self._bend_marks = (self.hard_brakes, self.harsh_jerks)
+        self._bend_since_peak = 0.0
       return
+    self._bend_since_peak += dt
     if g > BEND_G:
       self._bend_t += dt
     self._bend_dip = min(self._bend_dip, g)
@@ -376,6 +383,7 @@ class DriveScore:
       self._bend_peak = self._bend_dip = g
     elif g >= self._bend_peak:
       self._bend_peak = self._bend_dip = g
+      self._bend_since_peak = 0.0
     if g < BEND_EXIT_G:
       self._bend_on = False
       if self._bend_t < BEND_HOLD:
@@ -384,6 +392,7 @@ class DriveScore:
       clean = not self._bend_wobbled and (self.hard_brakes, self.harsh_jerks) == self._bend_marks
       if clean:
         self.clean_bends += 1
+      self.marks.append(("bend", clean, self._bend_since_peak))
       if self.flavour == SPIRITED:
         if clean:
           self._spirited_points("CLEAN CORNER", CLEAN_BEND_POINTS)
@@ -406,12 +415,15 @@ class DriveScore:
       peak_decel = max(0.0, -min(aa for _, aa, _ in self._stop_window))
       peak_jerk = max(jj for _, _, jj in self._stop_window)
       self.stops += 1
-      if peak_decel < SMOOTH_STOP_DECEL and peak_jerk < SMOOTH_STOP_JERK:
+      gentle = peak_decel < SMOOTH_STOP_DECEL and peak_jerk < SMOOTH_STOP_JERK
+      controlled = peak_decel < CONTROLLED_STOP_DECEL and peak_jerk < CONTROLLED_STOP_JERK
+      self.marks.append(("stop", controlled if self.flavour == SPIRITED else gentle, 0.0))
+      if gentle:
         self.smooth_stops += 1
         if self.flavour == SAFETY:
           self.points += SMOOTH_STOP_POINTS
           self._pop(f"+{SMOOTH_STOP_POINTS:,} SMOOTH STOP")
-      if peak_decel < CONTROLLED_STOP_DECEL and peak_jerk < CONTROLLED_STOP_JERK:
+      if controlled:
         self.controlled_stops += 1
         if self.flavour == SPIRITED:
           self._spirited_points("CLEAN STOP", CONTROLLED_STOP_POINTS)
@@ -528,8 +540,11 @@ class DriveScore:
     """A finished hard brake or launch with its peak |accel| in m/s^2."""
     if name == "LAUNCH":
       self._launch_check = CLEAN_LAUNCH_T  # judged once it is clear what followed it
+      if self.flavour == SAFETY:
+        self.marks.append(("launch", False, self._launch_age))
     elif peak > PANIC_DECEL:
       self.panic_brakes += 1
+      self.marks.append(("brake", False, 0.0))
       if self.flavour == SPIRITED:
         self._combo_lost()
     if self.flavour == SAFETY:
@@ -543,11 +558,15 @@ class DriveScore:
     if self.hard_brakes > self._launch_marks[0] or self.limiter_hits > self._launch_marks[1]:
       self._launch_check = None
       self.launches_judged += 1
+      if self.flavour == SPIRITED:
+        self.marks.append(("launch", False, self._launch_age))
       return
     if self._launch_check <= 0:
       self._launch_check = None
       self.launches_judged += 1
       self.clean_launches += 1
+      if self.flavour == SPIRITED:
+        self.marks.append(("launch", True, self._launch_age))
       if self.flavour == SPIRITED:
         self._spirited_points("CLEAN LAUNCH", CLEAN_LAUNCH_POINTS)
 

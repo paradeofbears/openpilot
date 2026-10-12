@@ -18,6 +18,7 @@ from openpilot.common.constants import CV
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_history import DriveHistory
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_map import DriveMap, DriveTrace, render_legend
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import Powertrain
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
   MIN_RANK_DISTANCE, SPIRITED, FLAVOUR_NAMES, OFF, SUB_NAMES, DriveScore, Extra, driver_in_control, rank_letter,
@@ -41,6 +42,7 @@ METERS_PER_MILE = 1609.344
 FEET_PER_METER = 3.28084
 
 PANEL_W = 1240
+CORNER_R = 25
 ROW_H = 132
 PAD = 44
 TITLE_SIZE = 56
@@ -52,6 +54,11 @@ VALUE = rl.Color(255, 255, 255, 255)
 LABEL = rl.Color(255, 255, 255, 150)
 ACCENT = rl.Color(128, 216, 166, 255)
 RANK_W = 660             # the rank column beside the stats, when a rank style is on
+MAP_W = 480              # the drive map between them, when there is a GPS trace
+MAP_STATS_W = 900        # the stats squeeze up to make room for the map
+MAP_VALUE_SIZE = 52
+LEGEND_H = 96
+LEGEND_SIZE = 26
 BADGE_R = 72
 BADGE_SIZE = 110
 BAR_H = 12
@@ -191,6 +198,8 @@ class TripCard:
     self.stats = TripStats()
     self.score = DriveScore()
     self.history = DriveHistory()
+    self.trace = DriveTrace()
+    self._map = DriveMap()
     self._alpha = FirstOrderFilter(0.0, 0.25, 1 / gui_app.target_fps)
     self._show = False
     self.just_shown = False  # the frame the card appears: when the drive is saved to the history
@@ -201,6 +210,7 @@ class TripCard:
     self.stats = TripStats()
     self.score = DriveScore(flavour=flavour)
     self.history.new_drive()
+    self.trace = DriveTrace()
     self._alpha.x = 0.0
     self._show = False
     self.just_shown = False
@@ -218,6 +228,10 @@ class TripCard:
       lead = sm['radarState'].leadOne
       driver = driver_in_control(cs.cruiseState.enabled, cc.longActive, cs.gasPressed)
       self.score.update(dt, cs.vEgo, cs.aEgo, driver, lead.present, lead.dRel, score_inputs(sm, pt, rev_limit))
+      self.trace.update(dt, fix, gps.latitude if fix else 0.0, gps.longitude if fix else 0.0, driver)
+      for kind, clean, ago in self.score.marks:
+        self.trace.mark(kind, clean, ago)
+      self.score.marks.clear()
     parked = cs.gearShifter == GearShifter.park
     show = parked and self.stats.distance >= MIN_SHOW_DISTANCE
     self.just_shown = show and not self._show
@@ -283,11 +297,13 @@ class TripCard:
       return
     rows = self.rows(is_metric)
     ranking = self.score.flavour != OFF
-    w = PANEL_W + (RANK_W if ranking else 0)
+    with_map = ranking and self.trace.drawable
+    stats_w, value_size = (MAP_STATS_W, MAP_VALUE_SIZE) if with_map else (PANEL_W, VALUE_SIZE)
+    w = stats_w + (MAP_W if with_map else 0) + (RANK_W if ranking else 0)
     h = PAD * 2 + TITLE_SIZE + 24 + ROW_H * len(rows)
     x = rect.x + (rect.width - w) / 2
     y = rect.y + (rect.height - h) / 2
-    rl.draw_rectangle_rounded(rl.Rectangle(x, y, w, h), 0.06 * PANEL_W / w, 12, _fade(PANEL_BG, a))
+    rl.draw_rectangle_rounded(rl.Rectangle(x, y, w, h), 2 * CORNER_R / min(w, h), 12, _fade(PANEL_BG, a))
 
     bold = gui_app.font(FontWeight.BOLD)
     semi = gui_app.font(FontWeight.SEMI_BOLD)
@@ -296,18 +312,24 @@ class TripCard:
     rl.draw_text_ex(bold, title, rl.Vector2(x + PAD, y + PAD), TITLE_SIZE, 0, _fade(TITLE, a))
     rl.draw_rectangle(int(x + PAD), int(y + PAD + TITLE_SIZE + 10), 90, 6, _fade(ACCENT, a))
 
-    col_w = (PANEL_W - 2 * PAD) / 2
+    col_w = (stats_w - 2 * PAD) / 2
     row_y = y + PAD + TITLE_SIZE + 24
     for left, right in rows:
       for i, (value, label) in enumerate((left, right)):
         cx = x + PAD + i * col_w
-        rl.draw_text_ex(semi, value, rl.Vector2(cx, row_y + 14), VALUE_SIZE, 0, _fade(VALUE, a))
-        rl.draw_text_ex(medium, label, rl.Vector2(cx, row_y + 14 + VALUE_SIZE + 4), LABEL_SIZE, 0, _fade(LABEL, a))
+        rl.draw_text_ex(semi, value, rl.Vector2(cx, row_y + 14), value_size, 0, _fade(VALUE, a))
+        rl.draw_text_ex(medium, label, rl.Vector2(cx, row_y + 14 + value_size + 4), LABEL_SIZE, 0, _fade(LABEL, a))
       row_y += ROW_H
 
+    rank_x = x + stats_w
+    if with_map:
+      rl.draw_rectangle(int(x + stats_w - 2), int(y + PAD), 2, int(h - 2 * PAD), _fade(TRACK, a))
+      self._map.render(self.trace, rl.Rectangle(x + stats_w + 8, y + PAD, MAP_W - 16, h - 2 * PAD - LEGEND_H), a)
+      render_legend(x + stats_w + PAD // 2, y + h - PAD - LEGEND_H + 22, medium, LEGEND_SIZE, LABEL, a)
+      rank_x += MAP_W
     if ranking:
-      rl.draw_rectangle(int(x + PANEL_W - 2), int(y + PAD), 2, int(h - 2 * PAD), _fade(TRACK, a))
-      self._draw_rank(x + PANEL_W + PAD // 2, y + PAD, RANK_W - PAD - PAD // 2, a, bold, semi, medium)
+      rl.draw_rectangle(int(rank_x - 2), int(y + PAD), 2, int(h - 2 * PAD), _fade(TRACK, a))
+      self._draw_rank(rank_x + PAD // 2, y + PAD, RANK_W - PAD - PAD // 2, a, bold, semi, medium)
 
   def _draw_rank(self, x: float, y: float, w: float, a: float, bold: rl.Font, semi: rl.Font, medium: rl.Font) -> None:
     sc = self.score
