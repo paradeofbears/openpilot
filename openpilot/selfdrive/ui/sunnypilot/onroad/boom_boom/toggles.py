@@ -13,8 +13,9 @@ STEER_LIMIT_ARC = "SteerLimitArc"
 G_METER = "GForceMeter"
 TRIP_CARD = "TripSummary"
 TRAFFIC = "TrafficBox"
+LANE_AWARENESS = "LaneAwareness"
 
-PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD, TRAFFIC)
+PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD, TRAFFIC, LANE_AWARENESS)
 
 
 def toggle_defs() -> dict:
@@ -55,6 +56,15 @@ def toggle_defs() -> dict:
          "(alpha long) it shows the lead cars the camera sees and the blind-spot zones; the stock radar is " +
          "silenced then, so cars in other lanes ahead are not shown. With stock cruise it also shows the radar's " +
          "tracks ahead. Nothing reports cars directly behind. Needs blind-spot monitoring for the side zones."),
+      None,
+    ),
+    LANE_AWARENESS: (
+      lambda: tr("Lane Awareness: Edge Glows and Gap Bar"),
+      tr("An amber glow on the left or right edge of the screen while the blind-spot monitor sees a car on that " +
+         "side, pulsing when your blinker points into it; nothing while a side is clear. Under the lead car's " +
+         "chevron, a bar of the time gap to it against your follow-distance setting, with a closing or opening " +
+         "arrow and BRAKING when it slows hard. The gap bar needs openpilot longitudinal (alpha long), which is " +
+         "what draws the chevron."),
       None,
     ),
   }

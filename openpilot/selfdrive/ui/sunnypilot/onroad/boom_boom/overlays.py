@@ -14,11 +14,14 @@ import pyray as rl
 from opendbc.sunnypilot.car.interfaces import get_steer_rail_schedule
 from openpilot.cereal import messaging
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.g_meter import FOOTPRINT_H as G_METER_H, GMeter
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lane_awareness import LaneAwareness
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lead_screen import lead_chevron
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import (
-  G_METER, PARAMS, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
+  G_METER, LANE_AWARENESS, PARAMS, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
 )
+from openpilot.selfdrive.ui.sunnypilot.onroad.chevron_metrics import ChevronOptions
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.traffic import TrafficBox, box_rect
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.trip_card import TripCard
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiState, get_bottom_dev_ui_offset
@@ -51,6 +54,7 @@ class BoomBoomOverlays(Widget):
     self.g_meter = GMeter()
     self.trip_card = TripCard()
     self.traffic = TrafficBox()
+    self.lane_awareness = LaneAwareness()
 
   def _reload_params(self) -> None:
     for p in PARAMS:
@@ -118,6 +122,7 @@ class BoomBoomOverlays(Widget):
       self.g_meter.reset()
       self.trip_card.reset()
       self.traffic.reset()
+      self.lane_awareness.reset()
 
     sm = ui_state.sm
     extra = self._extra_sm()
@@ -131,11 +136,18 @@ class BoomBoomOverlays(Widget):
       self.trip_card.update(sm, ui_state.engaged, ui_state.has_longitudinal_control, self._gps(), dt)
     if self.on(TRAFFIC):
       self.traffic.update(sm, self._extra(extra, 'radarTracks'), ui_state.engaged)
+    if self.on(LANE_AWARENESS):
+      self.lane_awareness.update(sm, dt)
 
   def _render(self, rect: rl.Rectangle) -> None:
     if not self._fresh():
       return
     bottom = rl.Rectangle(rect.x, rect.y, rect.width, rect.height - get_bottom_dev_ui_offset())
+    if self.on(LANE_AWARENESS):
+      # edges first: everything else draws over the glow
+      self.lane_awareness.render_edges(rect)
+      metric_lines = {ChevronOptions.OFF: 0, ChevronOptions.ALL: 3}.get(ui_state.chevron_metrics, 1)
+      self.lane_awareness.render_gap(rect, lead_chevron(0), metric_lines)
     # the driver monitoring icon takes the bottom corner on the driver's side
     g_meter_right = self.on(G_METER) and not ui_state.sm['driverMonitoringState'].isRHD
     if self.on(G_METER):

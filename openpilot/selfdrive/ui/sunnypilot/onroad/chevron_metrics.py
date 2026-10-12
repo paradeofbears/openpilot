@@ -8,6 +8,7 @@ import numpy as np
 
 import pyray as rl
 from openpilot.common.constants import CV
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.lead_screen import publish as publish_lead_chevrons
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -125,6 +126,7 @@ class ChevronMetrics:
       rl.draw_text_ex(self._font, line, rl.Vector2(x, y), font_size, 0, text_color)
 
   def draw_lead_status(self, sm, radar_state, rect, lead_vehicles):
+    publish_lead_chevrons(lead_vehicles)  # boom-boom: lets HUD widgets attach to the chevron
     lead_one = radar_state.leadOne
     lead_two = radar_state.leadTwo
 
