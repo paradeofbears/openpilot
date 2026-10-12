@@ -213,8 +213,9 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     // Drops only the device sound of "Turn Exceeds Steering Limit"; the banner and the car's dash warning stay.
     {"SilenceSteerLimitAlert", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RainbowMode", {PERSISTENT | BACKUP, BOOL, "0"}},
+    // boom-boom: these now live in selfdrive/ui/boom_boom/store.py. Kept registered for one release only so
+    // earlier settings survive manager start-up (it deletes unregistered keys) and migrate; then remove them.
     {"ReverseCameraView", {PERSISTENT | BACKUP, BOOL, "0"}},
-    // boom-boom display-only onroad widgets (selfdrive/ui/boom_boom), all off by default
     {"SlowdownReason", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"SteerLimitArc", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"GForceMeter", {PERSISTENT | BACKUP, BOOL, "0"}},
@@ -230,7 +231,6 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"ShiftLead", {PERSISTENT | BACKUP, INT, "1"}},
     {"ShiftPoint", {PERSISTENT | BACKUP, INT, "0"}},
     {"ShiftChimeVolume", {PERSISTENT | BACKUP, INT, "60"}},
-    {"ShiftChimeRequest", {CLEAR_ON_MANAGER_START, STRING}},
     {"RoadEdgeLaneChangeEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"RocketFuel", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ScreenSaverEnabled", {PERSISTENT | BACKUP, BOOL, "1"}},

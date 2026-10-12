@@ -34,6 +34,7 @@ from .shift_lights import (
 )
 from .slow_reason import SlowReasonPill
 from .steer_limit_arc import SteerLimitArc
+from .store import settings
 from .toggles import (
   G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, RANK_STYLE, SHIFT_CHIME, SHIFT_CHIME_REQUEST, SHIFT_LIGHTS, SHIFT_POINT,
   SHIFT_LEAD, SHIFT_REV_LIMIT, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
@@ -66,6 +67,7 @@ class BoomBoomOverlays(Widget):
     self._enabled: dict[str, bool] = {}
     self.failed: set[str] = set()  # switched off for this drive after an exception
     self._mapd_version: str | None = None
+    self.store = settings()
     self.rank_style = OFF
     self.rev_limit = DEFAULT_REV_LIMIT
     self.lead = DEFAULT_LEAD
@@ -94,17 +96,21 @@ class BoomBoomOverlays(Widget):
                      self.mini_map, self.shift_lights)
 
   def _reload_params(self) -> None:
+    st = self.store
     for p in PARAMS:
-      self._enabled[p] = ui_state.params.get_bool(p)
+      self._enabled[p] = st.get_bool(p)
     if self._enabled.get(MINI_MAP):
-      v = ui_state.params.get("MapdVersion")
+      try:
+        v = ui_state.params.get("MapdVersion")
+      except Exception:  # a build without mapd has no such key
+        v = None
       self._mapd_version = v.decode() if isinstance(v, bytes) else v
-    style = ui_state.params.get(RANK_STYLE)
+    style = st.get(RANK_STYLE)
     self.rank_style = style if isinstance(style, int) and OFF <= style <= SPIRITED else OFF
     if self._enabled.get(SHIFT_LIGHTS) or self.rank_style != OFF:
-      self.rev_limit = _option(ui_state.params.get(SHIFT_REV_LIMIT), REV_LIMIT_OPTIONS, DEFAULT_REV_LIMIT)
-      self.lead = _option(ui_state.params.get(SHIFT_LEAD), LEAD_OPTIONS, DEFAULT_LEAD)
-      self.shift_point = _option(ui_state.params.get(SHIFT_POINT), SHIFT_POINT_OPTIONS, AUTO)
+      self.rev_limit = _option(st.get(SHIFT_REV_LIMIT), REV_LIMIT_OPTIONS, DEFAULT_REV_LIMIT)
+      self.lead = _option(st.get(SHIFT_LEAD), LEAD_OPTIONS, DEFAULT_LEAD)
+      self.shift_point = _option(st.get(SHIFT_POINT), SHIFT_POINT_OPTIONS, AUTO)
 
   @property
   def ranking(self) -> bool:
@@ -207,7 +213,7 @@ class BoomBoomOverlays(Widget):
       self._guard(TRIP_CARD, self.trip_card.update, sm, ui_state.engaged, ui_state.has_longitudinal_control, self._gps(), dt,
                   flavour, pt, self.rev_limit)
       if self.ranking and self.trip_card.just_shown:
-        self._guard(RANK_STYLE, self.trip_card.history.save, ui_state.params, self.trip_card.score)
+        self._guard(RANK_STYLE, self.trip_card.history.save, self.store, self.trip_card.score)
     if self.on(TRAFFIC):
       self._guard(TRAFFIC, self.traffic.update, sm, self._extra(extra, 'radarTracks'), ui_state.engaged)
     if self.on(LANE_AWARENESS):
@@ -219,7 +225,7 @@ class BoomBoomOverlays(Widget):
 
   def _update_shift_lights(self, pt, dt: float) -> None:
     if self.shift_lights.update(pt, self.rev_limit, self.shift_point, dt, self.lead) and self.on(SHIFT_CHIME):
-      ui_state.params.put(SHIFT_CHIME_REQUEST, "1")  # soundd plays it if nothing else is sounding
+      self.store.put(SHIFT_CHIME_REQUEST, "1")  # soundd plays it if nothing else is sounding
 
   def _update_mini_map(self, sm, llk) -> None:
     if self._road_loader is None:

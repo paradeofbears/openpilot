@@ -4,7 +4,7 @@ Drive history for the rank: the last few ranked drives, so the trip card can sho
 This file is part of zoompilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 
-Kept in one JSON param (BoomDriveHistory), written when the trip card appears in Park. A drive is one onroad
+Kept in boom-boom's store (history.json), written when the trip card appears in Park. A drive is one onroad
 session: parking and driving on updates its entry rather than adding another. Each entry is small (style, rank,
 score, points, distance, best 0-30), and only the last MAX_DRIVES are kept. Display only.
 """

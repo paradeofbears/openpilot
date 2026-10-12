@@ -17,6 +17,7 @@ from openpilot.common.hardware import HARDWARE
 from openpilot.sunnypilot.selfdrive.ui.alert_volume import AlertVolume
 from openpilot.sunnypilot.selfdrive.ui.quiet_mode import QuietMode
 from openpilot.selfdrive.ui.boom_boom.shift_chime import ShiftChime
+from openpilot.selfdrive.ui.boom_boom.store import settings as boom_settings
 
 SAMPLE_RATE = 48000
 SAMPLE_BUFFER = 4096 # (approx 100ms)
@@ -85,7 +86,7 @@ class Soundd(QuietMode):
 
     self.alert_volume = AlertVolume(self.params)
     self.test_alert = False
-    self.shift_chime = ShiftChime(self.params)
+    self.shift_chime = ShiftChime(boom_settings())
 
     self.ramp_start_volume = MIN_VOLUME
     self.ramp_start_time = 0.

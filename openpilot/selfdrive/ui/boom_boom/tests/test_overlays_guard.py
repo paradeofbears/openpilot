@@ -48,15 +48,16 @@ def fake_ui_state(on):
 
 class TestOverlayGuard(OpenpilotTestCase):
   def setUp(self):
-    self._saved = (overlays_mod.ui_state, overlays_mod.messaging, overlays_mod.get_bottom_dev_ui_offset)
+    self._saved = (overlays_mod.ui_state, overlays_mod.messaging, overlays_mod.get_bottom_dev_ui_offset, overlays_mod.settings)
     overlays_mod.messaging = SimpleNamespace(SubMaster=lambda services: FakeSM())
     overlays_mod.get_bottom_dev_ui_offset = lambda: 0
 
   def tearDown(self):
-    overlays_mod.ui_state, overlays_mod.messaging, overlays_mod.get_bottom_dev_ui_offset = self._saved
+    overlays_mod.ui_state, overlays_mod.messaging, overlays_mod.get_bottom_dev_ui_offset, overlays_mod.settings = self._saved
 
   def make(self, on):
     overlays_mod.ui_state = fake_ui_state(on)
+    overlays_mod.settings = lambda: FakeParams(on)  # the switches live in boom-boom's store
     return overlays_mod.BoomBoomOverlays()
 
   def test_a_failing_update_switches_only_that_widget_off(self):

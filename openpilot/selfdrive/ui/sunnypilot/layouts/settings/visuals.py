@@ -5,8 +5,6 @@ This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 from openpilot.common.params import Params
-from openpilot.selfdrive.ui.boom_boom.toggles import extra_items as boom_boom_items
-from openpilot.selfdrive.ui.boom_boom.toggles import toggle_defs as boom_boom_toggle_defs
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.sunnypilot.widgets.list_view import toggle_item_sp, multiple_button_item_sp
@@ -89,14 +87,6 @@ class VisualsLayout(Widget):
         tr("When enabled, visual turn indicators are drawn on the HUD."),
         None,
       ),
-      "ReverseCameraView": (
-        lambda: tr("Show Cameras in Reverse"),
-        tr("In reverse, show the wide road camera and the cabin camera side by side instead of the " +
-           "full-screen Reverse banner. Neither camera looks behind the car: the road camera shows your " +
-           "front end while backing out, and the cabin camera catches a slice of the rear window. " +
-           "Use your car's backup camera and mirrors for reversing."),
-        None,
-      ),
       "RocketFuel": (
         lambda: tr("Real-time Acceleration Bar"),
         tr("Show an indicator on the left side of the screen to display real-time vehicle acceleration and deceleration. " +
@@ -104,7 +94,6 @@ class VisualsLayout(Widget):
         None,
       ),
     }
-    self._toggle_defs.update(boom_boom_toggle_defs())
     self._toggles = {}
     for param, (title, desc, callback) in self._toggle_defs.items():
       toggle = toggle_item_sp(
@@ -135,7 +124,7 @@ class VisualsLayout(Widget):
     items = list(self._toggles.values()) + [
       self._chevron_info,
       self._dev_ui_info,
-    ] + boom_boom_items(ui_state.params)
+    ]
     return items
 
   def _update_state(self):
