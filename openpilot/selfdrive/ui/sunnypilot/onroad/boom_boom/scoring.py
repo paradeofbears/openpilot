@@ -43,12 +43,17 @@ MOVING = 0.5               # m/s
 MPH = 0.44704
 HARD_BRAKE = -3.0          # m/s^2, entering an event
 HARD_BRAKE_EXIT = -2.0
-HARD_LAUNCH = 2.5
-HARD_LAUNCH_EXIT = 1.8
+HARD_LAUNCH = 3.0          # safety: ~0.3 g; a turbo on 40% throttle passes 2.5 (route 00000018)
+HARD_LAUNCH_EXIT = 2.2
+BRISK_LAUNCH = 2.5         # spirited: a launch brisk enough to judge as clean or not
+BRISK_LAUNCH_EXIT = 1.8
 SMOOTH_ACCEL = 1.0         # |a| below this is smooth
 JERK_TAU = 0.15            # s, smoothing of the jerk (the derivative of a 20 Hz acceleration is noisy)
 HARSH_JERK = 6.0           # m/s^3, entering a harsh-jerk event (smoothed |jerk| p99 on the reference drives)
 HARSH_JERK_EXIT = 3.0
+HARSH_JERK_HOLD = 0.09     # s over HARSH_JERK (two UI frames): a one-frame spike is a bump, not the driver
+JERK_MIN_SPEED = 2.0       # m/s; below this aEgo jumps by ~2 m/s^2 in a frame as the car creeps off (route 00000017)
+MIN_RATE_DISTANCE = 5000.0  # m; rates per 10 km are taken over at least this, so one slip on a short drive is not ten
 HARD_CORNER_G = 0.3        # lateral G held HARD_CORNER_HOLD counts as a hard corner (reference p99 0.27 g)
 HARD_CORNER_EXIT_G = 0.2
 HARD_CORNER_HOLD = 0.5
@@ -206,6 +211,7 @@ class DriveScore:
   _prev_a: float | None = None
   _jerk: float = 0.0
   _jerking: bool = False
+  _jerk_over_t: float = 0.0
   _corner_t: float = 0.0
   _cornering: bool = False
   _corner_peak: float = 0.0
@@ -256,7 +262,7 @@ class DriveScore:
     if self._since_event > COMBO_WINDOW_S:
       self._combo = 0
 
-    self._jerk_update(dt, a)
+    self._jerk_update(dt, v, a)
     self._stops_update(dt, v, a, driver)
     self._launch_update(dt, v, driver, lead_present, d_rel)
     self._judge_launch(dt)
@@ -274,7 +280,7 @@ class DriveScore:
       self.smooth_time += dt
 
     self._hard_events(a)
-    self._harsh_jerk()
+    self._harsh_jerk(dt)
     self._corners(dt, v, x)
     self._steering(dt, v, x)
     self._following(dt, v, lead_present, d_rel, x)
@@ -290,8 +296,10 @@ class DriveScore:
 
   # ---- events ---------------------------------------------------------------------------------------------
 
-  def _jerk_update(self, dt: float, a: float) -> None:
-    if self._prev_a is not None and dt > 0:
+  def _jerk_update(self, dt: float, v: float, a: float) -> None:
+    if v < JERK_MIN_SPEED:
+      self._jerk = 0.0
+    elif self._prev_a is not None and dt > 0:
       raw = (a - self._prev_a) / dt
       self._jerk += (raw - self._jerk) * min(1.0, dt / JERK_TAU)
     self._prev_a = a
@@ -306,19 +314,21 @@ class DriveScore:
       if a > HARD_BRAKE_EXIT:
         self._braking = False
         self._event("STOP", self._peak)
-    if not self._launching and a > HARD_LAUNCH:
+    launch, launch_exit = (HARD_LAUNCH, HARD_LAUNCH_EXIT) if self.flavour == SAFETY else (BRISK_LAUNCH, BRISK_LAUNCH_EXIT)
+    if not self._launching and a > launch:
       self._launching, self._peak = True, a
       self.hard_launches += 1
       self._launch_marks = (self.hard_brakes, self.limiter_hits)
     elif self._launching:
       self._peak = max(self._peak, a)
-      if a < HARD_LAUNCH_EXIT:
+      if a < launch_exit:
         self._launching = False
         self._event("LAUNCH", self._peak)
 
-  def _harsh_jerk(self) -> None:
+  def _harsh_jerk(self, dt: float) -> None:
     j = abs(self._jerk)
-    if not self._jerking and j > HARSH_JERK:
+    self._jerk_over_t = self._jerk_over_t + dt if j > HARSH_JERK else 0.0
+    if not self._jerking and self._jerk_over_t >= HARSH_JERK_HOLD:
       self._jerking = True
       self.harsh_jerks += 1
       if self.flavour == SAFETY:
@@ -548,7 +558,7 @@ class DriveScore:
   # ---- the rank -------------------------------------------------------------------------------------------
 
   def _per10(self, n: int) -> float:
-    return n * 10_000.0 / self.driver_distance
+    return n * 10_000.0 / max(self.driver_distance, MIN_RATE_DISTANCE)
 
   def following(self) -> float | None:
     if self.gap_t < MIN_DATA_T and self.tailgates == 0:

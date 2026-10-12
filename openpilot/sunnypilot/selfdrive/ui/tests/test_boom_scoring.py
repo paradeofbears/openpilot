@@ -33,7 +33,7 @@ class TestEvents(OpenpilotTestCase):
     drive(s, 1.0, a=-4.0)
     drive(s, 1.0, a=-2.5)   # still braking hard enough to be the same event
     drive(s, 1.0, a=0.0)
-    drive(s, 1.0, a=3.0)
+    drive(s, 1.0, a=3.5)
     drive(s, 1.0, a=0.0)
     drive(s, 1.0, a=-4.0, driver=False)  # openpilot's stop is not the driver's
     assert (s.hard_brakes, s.hard_launches) == (1, 1)
@@ -127,7 +127,7 @@ class TestRank(OpenpilotTestCase):
     for s in (calm, brisk):
       for _ in range(5):  # clean, brisk launches, rolling on and off the throttle
         for i in range(60):
-          s.update(DT, 20.0, 3.0 * min(1.0, i / 15, (60 - i) / 15), True, False, 100.0)
+          s.update(DT, 20.0, 3.5 * min(1.0, i / 15, (60 - i) / 15), True, False, 100.0)
         drive(s, 10.0)
     assert calm.rank_score() < 85 and brisk.rank() == "S"
 
@@ -295,3 +295,36 @@ class TestCardHighlights(OpenpilotTestCase):
     card.score = DriveScore(flavour=SAFETY, stops=4, smooth_stops=3, dm_t=100.0, distracted_t=2.0)
     values = {label: value for value, label in card.highlights()}
     assert values["smooth stops"] == "3/4" and values["eyes on the road"] == "98%" and values["average gap"] == "-"
+
+
+class TestRealWorldArtefacts(OpenpilotTestCase):
+  """Shapes seen on routes 00000017 and 00000018 that are not the driver."""
+
+  def test_creeping_off_from_a_stop_is_not_a_harsh_jerk(self):
+    s = DriveScore(flavour=SPIRITED)
+    drive(s, 1.0, v=0.0)
+    for v, a in ((0.0, 0.0), (0.27, 2.03), (0.54, 2.31), (0.72, 1.35), (0.8, 1.1)):  # aEgo jumps as it creeps
+      s.update(DT, v, a, True, False, 100.0)
+    assert s.harsh_jerks == 0
+
+  def test_a_one_frame_bump_is_ignored_but_a_real_stab_counts(self):
+    s = DriveScore(flavour=SAFETY)
+    for a in (0.2, 0.4, 1.12, -0.29, -0.44, 0.14, 0.2):  # route 18 at 17 mph
+      s.update(DT, 7.8, a, True, False, 100.0)
+    assert s.harsh_jerks == 0
+    for a in (0.0, -1.5, -3.0, -4.5, -4.5, -4.5, -4.5):  # stamping on the brake
+      s.update(DT, 7.8, a, True, False, 100.0)
+    assert s.harsh_jerks == 1
+
+  def test_a_brisk_launch_is_spirited_not_unsafe(self):
+    safety, spirited = DriveScore(flavour=SAFETY), DriveScore(flavour=SPIRITED)
+    for s in (safety, spirited):
+      drive(s, 1.0, a=2.6)  # ~40% throttle in the turbo
+      drive(s, 5.0)
+    assert safety.hard_launches == 0 and spirited.clean_launches == 1
+
+  def test_one_slip_on_a_short_drive_is_not_ten(self):
+    s = DriveScore(flavour=SAFETY)
+    drive(s, 60.0, x=Extra(distracted=False))  # 1.2 km
+    drive(s, 3.0, x=Extra(distracted=True))
+    assert s.distractions == 1 and s.awareness() > 70
