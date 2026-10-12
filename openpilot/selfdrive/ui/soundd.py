@@ -16,6 +16,7 @@ from openpilot.common.hardware import HARDWARE
 
 from openpilot.sunnypilot.selfdrive.ui.alert_volume import AlertVolume
 from openpilot.sunnypilot.selfdrive.ui.quiet_mode import QuietMode
+from openpilot.sunnypilot.selfdrive.ui.shift_chime import ShiftChime
 
 SAMPLE_RATE = 48000
 SAMPLE_BUFFER = 4096 # (approx 100ms)
@@ -84,6 +85,7 @@ class Soundd(QuietMode):
 
     self.alert_volume = AlertVolume(self.params)
     self.test_alert = False
+    self.shift_chime = ShiftChime(self.params)
 
     self.ramp_start_volume = MIN_VOLUME
     self.ramp_start_time = 0.
@@ -231,9 +233,16 @@ class Soundd(QuietMode):
         test_alert = self.alert_volume.poll_test_request()
         if test_alert is not None and self.alert_finished() and not sm['selfdriveState'].enabled:
           self.play_test_alert(test_alert)
+        # boom-boom shift chime: an existing one-shot sound, only into silence; a real alert cuts it short
+        if self.shift_chime.poll() and self.alert_finished() and sm['selfdriveState'].alertSound.raw == AudibleAlert.none:
+          self.play_test_alert(AudibleAlertSP.promptSingleHigh)
+          self.shift_chime.playing = True
 
         self.get_audible_alert(sm)
         self.current_volume = self.alert_volume.volume_for(self.current_alert, self.auto_volume)
+        self.shift_chime.playing = self.shift_chime.playing and self.test_alert
+        if self.shift_chime.playing:
+          self.current_volume = self.shift_chime.volume
 
         # Ramp up immediate warning sound over 4s, from whatever volume it was set to
         if self.current_alert == AudibleAlert.warningImmediate and not self.test_alert:

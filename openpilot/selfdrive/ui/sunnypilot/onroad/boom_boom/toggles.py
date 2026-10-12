@@ -16,13 +16,18 @@ TRAFFIC = "TrafficBox"
 LANE_AWARENESS = "LaneAwareness"
 MINI_MAP = "MiniMap"
 RANK_STYLE = "TripRankStyle"  # 0 off, 1 safety, 2 chaos (scoring.py)
+SHIFT_LIGHTS = "ShiftLights"
+SHIFT_CHIME = "ShiftChime"            # read by soundd too (sunnypilot/selfdrive/ui/shift_chime.py)
+SHIFT_RPM = "ShiftLightsRpm"          # index into shift_lights.SHIFT_RPM_OPTIONS
+SHIFT_CHIME_VOLUME = "ShiftChimeVolume"
+SHIFT_CHIME_REQUEST = "ShiftChimeRequest"
 
-PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD, TRAFFIC, LANE_AWARENESS, MINI_MAP)
+PARAMS = (SLOW_REASON, STEER_LIMIT_ARC, G_METER, TRIP_CARD, TRAFFIC, LANE_AWARENESS, MINI_MAP, SHIFT_LIGHTS, SHIFT_CHIME)
 
 
 def extra_items(params) -> list:
   """Settings items that are not on/off toggles, appended after the visuals layout's own."""
-  from openpilot.system.ui.sunnypilot.widgets.list_view import multiple_button_item_sp
+  from openpilot.system.ui.sunnypilot.widgets.list_view import multiple_button_item_sp, option_item_sp
   selected = params.get(RANK_STYLE, return_default=True) or 0
   return [
     multiple_button_item_sp(
@@ -35,6 +40,24 @@ def extra_items(params) -> list:
       selected_index=int(selected),
       param=RANK_STYLE,
       inline=False,
+    ),
+    multiple_button_item_sp(
+      title=lambda: tr("Shift Lights: Shift Point"),
+      description=lambda: tr("The rpm where the lights flash and the chime sounds. The 2.5 Turbo's torque is flat, " +
+                             "so shifting below its roughly 6,000 rpm redline loses little; check your own tach."),
+      buttons=[lambda: "4500", lambda: "5000", lambda: "5500", lambda: "6000"],
+      selected_index=int(params.get(SHIFT_RPM, return_default=True) or 0),
+      param=SHIFT_RPM,
+      inline=False,
+    ),
+    option_item_sp(
+      title=lambda: tr("Shift Lights: Chime Volume"),
+      param=SHIFT_CHIME_VOLUME,
+      min_value=10,
+      max_value=100,
+      value_change_step=10,
+      description=lambda: tr("Volume of the shift chime, in percent."),
+      label_callback=lambda v: f"{v}%",
     ),
   ]
 
@@ -93,6 +116,19 @@ def toggle_defs() -> dict:
       tr("A small round heading-up map in the bottom-left corner, drawn from the OpenStreetMap data downloaded " +
          "in the OSM panel, with the road you are on highlighted and the zoom widening with speed. Needs a " +
          "map download for the area and a GPS fix; it says NO GPS or NO MAP DATA rather than guess. Display only."),
+      None,
+    ),
+    SHIFT_LIGHTS: (
+      lambda: tr("Shift Lights (Manual Mode)"),
+      tr("With the lever in the M gate, a race-style row of dots above the speed fills green, amber and red as the " +
+         "revs climb toward your shift point and flashes blue at it, with the gear beside it. Hidden in D, where the " +
+         "gearbox shifts for you. Reads the engine speed and gear from the car's CAN bus. Display only."),
+      None,
+    ),
+    SHIFT_CHIME: (
+      lambda: tr("Shift Lights: Chime at the Shift Point"),
+      tr("A short beep when the shift lights flash, once per climb and never in top gear. It plays only when no " +
+         "alert sound is playing, and any real alert cuts it off. Volume below."),
       None,
     ),
   }

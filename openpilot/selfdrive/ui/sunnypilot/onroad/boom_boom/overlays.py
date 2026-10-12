@@ -28,10 +28,13 @@ from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mini_map import DM_CLEAR
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.osm_roads import SUPPORTED_MAPD_VERSIONS, RoadLoader
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom import points_hud
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import CHAOS, OFF
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import CanTap
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.shift_lights import DEFAULT_SHIFT_RPM, SHIFT_RPM_OPTIONS, ShiftLights
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.slow_reason import SlowReasonPill
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.steer_limit_arc import SteerLimitArc
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.toggles import (
-  G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, RANK_STYLE, SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
+  G_METER, LANE_AWARENESS, MINI_MAP, PARAMS, RANK_STYLE, SHIFT_CHIME, SHIFT_CHIME_REQUEST, SHIFT_LIGHTS, SHIFT_RPM,
+  SLOW_REASON, STEER_LIMIT_ARC, TRAFFIC, TRIP_CARD,
 )
 from openpilot.selfdrive.ui.sunnypilot.onroad.chevron_metrics import ChevronOptions
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.traffic import TrafficBox, box_rect
@@ -57,6 +60,7 @@ class BoomBoomOverlays(Widget):
     self.failed: set[str] = set()  # switched off for this drive after an exception
     self._mapd_version: str | None = None
     self.rank_style = OFF
+    self.shift_rpm = DEFAULT_SHIFT_RPM
     self._reload_params()
     self._last_t = time.monotonic()
     self._started = False
@@ -75,8 +79,10 @@ class BoomBoomOverlays(Widget):
     self.lane_awareness = LaneAwareness()
     self.mini_map = MiniMap()
     self._road_loader: RoadLoader | None = None  # started the first time the mini-map is on
+    self.shift_lights = ShiftLights()
+    self._can_tap = CanTap()  # subscribes to `can` only while the shift lights are on
     self._widgets = (self.slow_reason, self.steer_arc, self.g_meter, self.trip_card, self.traffic, self.lane_awareness,
-                     self.mini_map)
+                     self.mini_map, self.shift_lights)
 
   def _reload_params(self) -> None:
     for p in PARAMS:
@@ -86,6 +92,9 @@ class BoomBoomOverlays(Widget):
       self._mapd_version = v.decode() if isinstance(v, bytes) else v
     style = ui_state.params.get(RANK_STYLE)
     self.rank_style = style if isinstance(style, int) and OFF <= style <= CHAOS else OFF
+    if self._enabled.get(SHIFT_LIGHTS):
+      i = ui_state.params.get(SHIFT_RPM)
+      self.shift_rpm = SHIFT_RPM_OPTIONS[i] if isinstance(i, int) and 0 <= i < len(SHIFT_RPM_OPTIONS) else DEFAULT_SHIFT_RPM
 
   @property
   def ranking(self) -> bool:
@@ -188,6 +197,14 @@ class BoomBoomOverlays(Widget):
       self._guard(LANE_AWARENESS, self.lane_awareness.update, sm, dt)
     if self.on(MINI_MAP):
       self._guard(MINI_MAP, self._update_mini_map, sm, self._extra(extra, 'liveLocationKalman'))
+    if self.on(SHIFT_LIGHTS):
+      self._guard(SHIFT_LIGHTS, self._update_shift_lights, dt)
+    else:
+      self._can_tap.close()
+
+  def _update_shift_lights(self, dt: float) -> None:
+    if self.shift_lights.update(self._can_tap.update(), self.shift_rpm, dt) and self.on(SHIFT_CHIME):
+      ui_state.params.put(SHIFT_CHIME_REQUEST, "1")  # soundd plays it if nothing else is sounding
 
   def _update_mini_map(self, sm, llk) -> None:
     if self._road_loader is None:
@@ -227,6 +244,10 @@ class BoomBoomOverlays(Widget):
       self._guard(STEER_LIMIT_ARC, self.steer_arc.render, bottom, drawing=True)
     if self.on(SLOW_REASON):
       self._guard(SLOW_REASON, self.slow_reason.render, rect, drawing=True)
+    if self.on(SHIFT_LIGHTS):
+      # above the speed, or under it when the road name takes the top
+      low = bool(getattr(ui_state, "road_name_toggle", False))
+      self._guard(SHIFT_LIGHTS, self.shift_lights.render, rect, low, drawing=True)
     if self.ranking and TRIP_CARD not in self.failed:
       self._guard(RANK_STYLE, points_hud.render, rect, self.trip_card.score, drawing=True)
     if self.on(TRIP_CARD):

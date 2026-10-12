@@ -15,7 +15,7 @@ from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 
 X_FROM_CENTRE = 270      # px right of the view's centre: clear of the speed and the right turn-signal icon
-TOP = 80
+TOP = 100                # below the shift lights' row when both are on
 POINTS_SIZE = 56
 LABEL_SIZE = 28
 POP_SIZE = 34
