@@ -17,6 +17,7 @@ from opendbc.car.structs import car
 from openpilot.common.constants import CV
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.system.ui.lib.application import FontWeight, gui_app
+from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.drive_history import DriveHistory
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.mazda_can import Powertrain
 from openpilot.selfdrive.ui.sunnypilot.onroad.boom_boom.scoring import (
   CHAOS, FLAVOUR_NAMES, OFF, SUB_NAMES, DriveScore, Extra, driver_in_control, rank_letter,
@@ -189,16 +190,20 @@ class TripCard:
   def __init__(self):
     self.stats = TripStats()
     self.score = DriveScore()
+    self.history = DriveHistory()
     self._alpha = FirstOrderFilter(0.0, 0.25, 1 / gui_app.target_fps)
     self._show = False
+    self.just_shown = False  # the frame the card appears: when the drive is saved to the history
     self._has_long = False
 
   def reset(self) -> None:
     flavour = self.score.flavour
     self.stats = TripStats()
     self.score = DriveScore(flavour=flavour)
+    self.history.new_drive()
     self._alpha.x = 0.0
     self._show = False
+    self.just_shown = False
 
   def update(self, sm, engaged: bool, has_long_control: bool, gps, dt: float, flavour: int = OFF,
              pt: Powertrain | None = None, rev_limit: float = 5900.0) -> None:
@@ -214,7 +219,9 @@ class TripCard:
       driver = driver_in_control(cs.cruiseState.enabled, cc.longActive, cs.gasPressed)
       self.score.update(dt, cs.vEgo, cs.aEgo, driver, lead.present, lead.dRel, score_inputs(sm, pt, rev_limit))
     parked = cs.gearShifter == GearShifter.park
-    self._show = parked and self.stats.distance >= MIN_SHOW_DISTANCE
+    show = parked and self.stats.distance >= MIN_SHOW_DISTANCE
+    self.just_shown = show and not self._show
+    self._show = show
     self._alpha.update(1.0 if self._show else 0.0)
 
   def rows(self, is_metric: bool) -> list[tuple[tuple[str, str], tuple[str, str]]]:
@@ -316,6 +323,9 @@ class TripCard:
     caption = tr(FLAVOUR_NAMES[sc.flavour] + " RANK") if letter else tr("drive 1 km yourself to rank")
     rl.draw_text_ex(medium, caption, rl.Vector2(tx, y + 8), LABEL_SIZE, 0, _fade(LABEL, a))
     rl.draw_text_ex(semi, f"{sc.points:,} " + tr("pts"), rl.Vector2(tx, y + 8 + LABEL_SIZE + 6), 56, 0, _fade(VALUE, a))
+    if self.history.line:
+      rl.draw_text_ex(medium, self.history.line, rl.Vector2(tx, y + 8 + LABEL_SIZE + 6 + 56 + 8), LABEL_SIZE - 2, 0,
+                      _fade(RANK_COLORS["S"] if "NEW" in self.history.line or "PB" in self.history.line else LABEL, a))
 
     by = y + 2 * BADGE_R + 28
     subs = sc.sub_scores() or (None,) * 4

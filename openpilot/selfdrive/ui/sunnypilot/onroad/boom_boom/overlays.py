@@ -206,6 +206,8 @@ class BoomBoomOverlays(Widget):
       flavour = self.rank_style if self.ranking else OFF
       self._guard(TRIP_CARD, self.trip_card.update, sm, ui_state.engaged, ui_state.has_longitudinal_control, self._gps(), dt,
                   flavour, pt, self.rev_limit)
+      if self.ranking and self.trip_card.just_shown:
+        self._guard(RANK_STYLE, self.trip_card.history.save, ui_state.params, self.trip_card.score)
     if self.on(TRAFFIC):
       self._guard(TRAFFIC, self.traffic.update, sm, self._extra(extra, 'radarTracks'), ui_state.engaged)
     if self.on(LANE_AWARENESS):

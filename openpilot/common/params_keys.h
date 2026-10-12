@@ -223,6 +223,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"LaneAwareness", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"MiniMap", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"TripRankStyle", {PERSISTENT | BACKUP, INT, "0"}},
+    {"BoomDriveHistory", {PERSISTENT | BACKUP, JSON}},
     {"ShiftLights", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ShiftChime", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ShiftRevLimit", {PERSISTENT | BACKUP, INT, "1"}},
